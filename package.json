@@ -1,0 +1,27 @@
+{
+  "name": "mountainstat",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "classnames": "^2.3.2",
+    "mqtt": "^4.3.7",
+    "mqtt-react-hooks": "jvoj/mqtt-react-hooks#b75cc33d5addb92686c26f99dc4c6666dc7eb15f",
+    "precompiled-mqtt": "^4.3.14-beta",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "sass": "^1.58.1",
+    "typescript": "^4.9.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.28",
+    "@types/react-dom": "^18.0.10",
+    "@vitejs/plugin-react": "^3.1.0",
+    "vite": "^4.1.0"
+  }
+}
