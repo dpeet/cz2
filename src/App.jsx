@@ -1,32 +1,48 @@
-import React from 'react';
 import { useEffect, useState } from 'react';
 import mqtt from 'precompiled-mqtt';
 import Thermostat from './thermostat';
 import './App.scss';
-import {data} from './json_response';
-import { createNoSubstitutionTemplateLiteral } from 'typescript';
+import { data } from './json_response';
+import axios from 'axios';
+import CircleLoader from "react-spinners/CircleLoader";
 
 export default function App() {
-  const [connectionStatus, setConnectionStatus] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState("Not Connected");
+  const [initialUpdate, setInitialUpdate] = useState(false);
   const [messages, setMessages] = useState([]);
   const [cz2messages, setCZ2Messages] = useState([]);
   const [zone1temp, setZone1Temp] = useState(null);
   const [zone1Humidity, setZone1Humidity] = useState(null);
   const [zone1CoolSetPoint, setZone1CoolSetPoint] = useState(null);
   const [zone1HeatSetPoint, setZone1HeatSetPoint] = useState(null);
+  const [zone1Hold, setZone1Hold] = useState(null);
   const [zone2temp, setZone2Temp] = useState(null);
   const [zone2CoolSetPoint, setZone2CoolSetPoint] = useState(null);
   const [zone2HeatSetPoint, setZone2HeatSetPoint] = useState(null);
+  const [zone2Hold, setZone2Hold] = useState(null);
   const [zone3temp, setZone3Temp] = useState(null);
   const [zone3CoolSetPoint, setZone3CoolSetPoint] = useState(null);
   const [zone3HeatSetPoint, setZone3HeatSetPoint] = useState(null);
+  const [zone3Hold, setZone3Hold] = useState(null);
   const [allMode, setAllMode] = useState(null);
-  
+  const [allModeButtonLabel, setAllModeButtonLabel] = useState('');
+  const [zoneSelection, setZoneSelection] = useState('');
+  const [modeSelection, setModeSelection] = useState('');
+  const [targetTemperatureSelection, setTargetTemperatureSelection] = useState('');
+  const [isTempChangeLoading, setIsTempChangeLoading] = useState(false);
+  const [isSystemModeChangeLoading, setIsSystemModeChangeLoading] = useState(false);
+  const [systemMode, setSystemMode] = useState('Unknown');
+  const [systemModeSelection, setSystemModeSelection] = useState('');
+  const [systemFanMode, setSystemFanMode] = useState('Unknown');
+  const [systemFanModeButtonLabel, setSystemFanModeButtonLabel] = useState('');
+  const [lastUpdated, setLastUpdated] = useState('Never');
+  const [hvacTime, setHvacTime] = useState("");
+
   const status = import.meta.env.PROD ? 'production' : 'development';
 
-  const client = mqtt.connect("ws://100.73.101.33:9001");
+  const client = mqtt.connect("wss://mqttmtn.dpeet.net");
 
-  const setData = (data) => {
+  const setData = (data, preconnect) => {
     console.log(data)
     setZone1Temp(data['zones'][0]['temperature']);
     setZone1Humidity(data['zone1_humidity']);
@@ -38,16 +54,49 @@ export default function App() {
     setZone1HeatSetPoint(data['zones'][0]['heat_setpoint']);
     setZone2HeatSetPoint(data['zones'][1]['heat_setpoint']);
     setZone3HeatSetPoint(data['zones'][2]['heat_setpoint']);
-    setAllMode(data['all_mode'] = 1 ? true: false);
+    setZone1Hold(data['zones'][0]['hold']);
+    setZone2Hold(data['zones'][1]['hold']);
+    setZone3Hold(data['zones'][2]['hold']);
+    setAllMode(data['all_mode']);
+    data['all_mode'] === 1 ? setZoneSelection("all") : null;
+    if (data['all_mode'] === 1) setAllModeButtonLabel("Set All Mode Off")
+    else if (data['all_mode'] === 0) setAllModeButtonLabel("Set All Mode On")
+    setSystemMode(data['system_mode']);
+    setSystemFanMode(data['fan_mode']);
+    if (data['fan_mode'] === "Auto") setSystemFanModeButtonLabel("Set Always On")
+    else if (data['fan_mode'] === "Always On") setSystemFanModeButtonLabel("Set Auto")
+    if (!preconnect) {
+      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+    }
   }
 
+  // useEffect(() => {
+  //   client = mqtt.connect("wss://mqttmtn.dpeet.net");
+  //   console.log("connected")
+  //   if(client !== null) {
+  //     if(client.connected === true) {
+  //       setConnectionStatus("Connected")
+  //     }
+  //   }
+  // }, []);
+
   useEffect(() => {
-    if(!connectionStatus) {
-      console.log(client.connected)
-      console.log("Setting Default Data")
+    if (connectionStatus !== "Connected") {
+      console.log("Trying to connect")
       if (status === 'development') {
-        setData(data)
+        console.log("Setting Default Data")
+        // setData(data)
       }
+    }
+    if (connectionStatus !== "Connected" && !initialUpdate) {
+      console.log("Initial Update")
+      // axios.get('https://nodered.mtnhouse.dpeet.net/hvac/update')
+      //   .then((response) => {
+      //     console.log(response.data)
+      //   }).catch(error => {
+      //     console.log(error)
+      // })
+      setInitialUpdate(true)
     }
     client.on('connect', () => {
       console.log('Connected');
@@ -55,11 +104,13 @@ export default function App() {
       setConnectionStatus(true);
     });
     client.on('message', (topic, payload, packet) => {
-      setMessages(messages.concat(payload.toString()));
+      // setMessages(messages.concat(payload.toString()));
       if (topic === 'hvac/cz2') {
         let json_payload = JSON.parse(payload.toString())
-        setCZ2Messages(messages.concat(json_payload));
-        setData(json_payload)
+        if (json_payload['time'] !== hvacTime){
+          setCZ2Messages(messages.concat(json_payload));
+          setData(json_payload)
+        }
       }
     });
     client.on('error', (err) => {
@@ -68,52 +119,259 @@ export default function App() {
     });
   }, [client]);
 
+  const handleTempZoneChange = (event) => {
+    setZoneSelection(event.target.value);
+  };
+
+  const handleTempModeChange = (event) => {
+    setModeSelection(event.target.value);
+  };
+
+  const handleTargetTemperatureChange = (event) => {
+    setTargetTemperatureSelection(parseInt(event.target.value));
+  };
+
+  const handleSystemModeChange = (event) => {
+    setSystemModeSelection(event.target.value);
+    setIsSystemModeChangeLoading(true);
+    axios.get(`https://nodered.mtnhouse.dpeet.net/hvac/system/mode?mode=${event.target.value}`)
+      .then((response) => {
+        console.log(response.data)
+        setIsSystemModeChangeLoading(false)
+      }).catch(error => {
+        console.log(error)
+        setIsSystemModeChangeLoading(false)
+      })
+    setSystemModeSelection("");
+  };
+
+  const handleFanModeChange = (event) => {
+    // TODO this should really be a better toggle, but it's manually setting everything now
+    // ie buttonlabel should update automatically, not be set everywhere
+    let fan_mode_desired = null
+    if (systemFanMode === "Auto") fan_mode_desired = "always_on"
+    if (systemFanMode === "Always On") fan_mode_desired = "auto"
+    axios.get(`https://nodered.mtnhouse.dpeet.net/hvac/system/fan?fan=${fan_mode_desired}`)
+      .then((response) => {
+        console.log(response.data)
+        if (systemFanMode === "Auto") {
+          setSystemFanMode("Always On");
+          systemFanModeButtonLabel("Set Auto")
+        }
+        else if (systemFanMode === "Always On") {
+          setSystemFanMode("Auto");
+          systemFanModeButtonLabel("Set Always On")
+
+        }
+        else console.log("systemFanMode broken")
+      }).catch(error => {
+        console.log(error)
+      })
+  }
+
+  const handleAllModeChange = (event) => {
+    // TODO this should really be a better toggle, but it's manually setting everything now
+    // ie buttonlabel should update automatically, not be set everywhere
+    let all_mode_desired = null
+    if (allMode === "On") all_mode_desired = "off"
+    if (allMode === "Off") all_mode_desired = "on"
+    axios.get(`https://nodered.mtnhouse.dpeet.net/hvac/system/allmode?mode=${all_mode_desired}`)
+      .then((response) => {
+        console.log(response.data)
+        if (allMode === "On") {
+          setAllMode("Off");
+          allModeButtonLabel("Set On")
+        }
+        else if (allMode === "Off") {
+          setAllMode("On");
+          allModeButtonLabel("Set On")
+
+        }
+        else console.log("allMode broken")
+      }).catch(error => {
+        console.log(error)
+      })
+  }
+
+  const handleTempChangeSubmit = (event) => {
+    event.preventDefault();
+    setIsTempChangeLoading(true);
+
+    axios.get(`https://nodered.mtnhouse.dpeet.net/hvac/settemp?mode=${modeSelection}&temp=${targetTemperatureSelection}&zone=${zoneSelection}`)
+      .then((response) => {
+        console.log(response.data)
+        setIsTempChangeLoading(false)
+      }).catch(error => {
+        setError(error);
+        console.log(error)
+        setIsTempChangeLoading(false)
+      })
+  };
+
+  const addHoverBorder = (event) => {
+    event.target.classList.add("hover-border");
+    console.log(event)
+  }
+
   return (
     <div className='app'>
       <div className='thermostats'>
         <div className='main'>
-          <Thermostat 
-            zone={1} 
+          <Thermostat
+            zone={1}
             displayTemp={zone1temp}
             humidity={zone1Humidity}
             coolSetPoint={zone1CoolSetPoint}
             heatSetPoint={zone1HeatSetPoint}
+            hold={zone1Hold}
           ></Thermostat>
         </div>
         <div className='secondary'>
-          <Thermostat 
-            zone={2} 
+          <Thermostat
+            zone={2}
             displayTemp={zone2temp}
             coolSetPoint={zone2CoolSetPoint}
             heatSetPoint={zone2HeatSetPoint}
             allMode={allMode}
+            hold={zone2Hold}
           ></Thermostat>
-          <Thermostat 
-            zone={3} 
+          <Thermostat
+            zone={3}
             displayTemp={zone3temp}
             coolSetPoint={zone3CoolSetPoint}
             heatSetPoint={zone3HeatSetPoint}
             allMode={allMode}
+            hold={zone3Hold}
           ></Thermostat>
         </div>
-        
+
       </div>
-      <div className='diagnostics'>
+      <div className='system_status'>
+        <div className='title'>
+          <h1>System Status</h1>
+          <p>{`Connection Status: ${connectionStatus}`}</p>
+          <p>Number of Updates: {cz2messages.length}</p>
+          <p>Last Updated: {lastUpdated}</p>
+        </div>
+        <div className='system_statuses'>
+          <div className='system_status_item'>
+            <div className='system_status_item_label'>
+              <p>Mode</p>
+              <h2>{systemMode}</h2>
+            </div>
+            <div className="form-group">
+              {systemMode === "Unknown" ?
+                <select className="system_disabled" disabled value={systemModeSelection} onChange={handleSystemModeChange} required>
+                  <option value="">Unknown</option>
+                </select>
+                :
+                <select className='hoverable' value={systemModeSelection} onChange={handleSystemModeChange} required>
+                  <option value="">Select Mode</option>
+                  <option value="heat">Heat</option>
+                  <option value="cool">Cool</option>
+                  <option value="auto">Auto</option>
+                  <option value="off">Off</option>
+                </select>}
+            </div>
+            {/* TODO right now this only loads while the mode is changed, but doesn't wait for an update */}
+            <CircleLoader loading={isSystemModeChangeLoading} size={20} />
+          </div>
+          <div className='system_status_item'>
+            <div className='system_status_item_label'>
+              <p>Fan</p>
+              <h2>{systemFanMode}</h2>
+            </div>
+            <div className="form-group">
+              {systemFanMode === "Unknown" ?
+                <button className="system_disabled" type="submit" disabled>Unknown</button>
+                :
+                <button className="system" type="submit" onClick={handleFanModeChange}>
+                  {systemFanModeButtonLabel}
+                </button>
+              }
+            </div>
+            {/* TODO right now this only loads while the mode is changed, but doesn't wait for an update */}
+            {/* <CircleLoader loading={} size={20} /> */}
+          </div>
+          <div className='system_status_item'>
+            <div className='system_status_item_label'>
+              <p>All Mode</p>
+              {allMode == 1 && <h2>On</h2>}
+              {allMode == 0 && <h2>Off</h2>}
+              {allMode == null && <h2>Unknown</h2>}
+            </div>
+            <div className="form-group">
+              {allMode === null ?
+                <button className="system_disabled" type="submit" disabled>Unknown</button>
+                :
+                <button className="system" type="submit" onClick={handleAllModeChange}>
+                  {allModeButtonLabel}
+                </button>
+              }
+
+
+            </div>
+            {/* TODO right now this only loads while the mode is changed, but doesn't wait for an update */}
+            {/* <CircleLoader loading={} size={20} /> */}
+          </div>
+        </div>
+        <div className='temp_control'>
+          <h2 className='change_temp'>Change Temperature</h2>
+          <form className="thermostat-form" onSubmit={handleTempChangeSubmit}>
+            {allMode ?
+              <div className="form-group">
+                <label>Zone</label>
+                <select value={zoneSelection} onChange={handleTempZoneChange} disabled>
+                  <option value="all">All Zones</option>
+                </select>
+              </div>
+              :
+              <div className="form-group">
+                <label>Zone</label>
+                <select className='hoverable' value={zoneSelection} onChange={handleTempZoneChange} required>
+                  <option value="">Select Zone</option>
+                  <option value="all">All</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                </select>
+              </div>}
+            <div className="form-group">
+              <label>Mode</label>
+              <select className="hoverable" value={modeSelection} onChange={handleTempModeChange} required>
+                <option value="">Select mode</option>
+                <option value="heat">Heat</option>
+                <option value="cool">Cool</option>
+              </select>
+
+            </div>
+            <div className="form-group">
+              <label>Target Temperature:</label>
+              <input type="number" min="45" max="80" value={targetTemperatureSelection} onChange={handleTargetTemperatureChange} required />
+            </div>
+            <button className="temp" type="submit" disabled={isTempChangeLoading}>
+              {isTempChangeLoading ? "Loading..." : "Submit"}
+            </button>
+          </form>
+        </div>
+
+      </div>
+      {/* <div className='diagnostics'>
         <p>{`Connection Status: ${connectionStatus}`}</p>
-        <p>Total Messages = {messages.length}</p>
+        <p>Total Messages = {cz2messages.length}</p>
 
         <h1>Zone 1 Temp: {zone1temp}</h1>
         <h1>Zone 2 Temp: {zone2temp}</h1>
         <h1>Zone 3 Temp: {zone3temp}</h1>
 
         {/* display the last message of the messages array */}
-        <p>Last Message:</p>
-        <p>{messages[messages.length - 1]}</p>
+      {/* <p>Last Message:</p> */}
+      {/* <p>{cz2messages[cz2messages.length - 1].toString}</p> */}
 
-        {/* {messages.map((message) => (
+      {/* {messages.map((message) => (
         <h2 key={JSON.parse(message)['time']}>{JSON.parse(message)['time']} {message}</h2>
       ))} */}
-      </div>
+      {/* </div> */}
 
     </div>
   )

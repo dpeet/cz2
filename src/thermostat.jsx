@@ -1,20 +1,16 @@
-import React, { useState } from 'react';
 import classNames from 'classnames';
 
 function Thermostat(props) {
 
-    const handleTemperatureDisplayChange = (event) => {
-        // setTemperatureDisplay(parseInt(event.target.value));
-    };
-
-    const thermostatClasses = classNames({
+    // TODO change the "disable" state to not disable the temp color
+    let thermostatClasses = classNames({
         'thermostat': true,
         allmode: props.allMode,
     });
 
     return (
         <div className={thermostatClasses}>
-            Zone {props.zone}
+            <div className='Zone'>Zone {props.zone}</div>
             <div className='humidity'>
                 {props.humidity && <h3 className='humidity'>{props.humidity}%</h3>}
             </div>
@@ -25,6 +21,7 @@ function Thermostat(props) {
             </div>
             <div className='setTemps'>
                 <h2 className='heatSetPoint'>{props.heatSetPoint}</h2>
+                {props.hold && <h2 className='hold'>{"Hold"}</h2>}
                 <h2 className='coolSetPoint'>{props.coolSetPoint}</h2>
             </div>
             {/* <input type="range" min="60" max="80" value={temperatureDisplay} onChange={handleTemperatureDisplayChange} /> */}
