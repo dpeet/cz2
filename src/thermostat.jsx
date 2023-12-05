@@ -12,7 +12,7 @@ function Thermostat(props) {
         <div className={thermostatClasses}>
             <div className='Zone'>Zone {props.zone}</div>
             <div className='humidity'>
-                {props.humidity && <h3 className='humidity'>{props.humidity}%</h3>}
+                {props.humidity && <h3 className='humidity'>Humidity: {props.humidity}%</h3>}
             </div>
             
             
