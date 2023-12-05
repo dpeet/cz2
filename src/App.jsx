@@ -11,11 +11,8 @@ export default function App() {
   const [hvacTime, setHvacTime] = useState("");
   const [display, setDisplay] = useState(false);
 
-  const status = import.meta.env.PROD ? 'production' : 'development';
-
-
   useEffect(() => {
-    const client = mqtt.connect("wss://mqttmtn.dpeet.net");
+    const client = mqtt.connect("wss://mqtt.mtnhouse.casa");
 
     // if (connectionStatus !== "Connected") {
     //   console.log("Trying to connect")
@@ -29,7 +26,7 @@ export default function App() {
     // }
     if (connectionStatus !== "Connected" && initialUpdate === false) {
       console.log("Initial Update")
-      // axios.get('https://nodered.mtnhouse.dpeet.net/hvac/update')
+      // axios.get('https://nodered.mtnhouse.casa/hvac/update')
       //   .then((response) => {
       //     console.log(response.data)
       //   }).catch(error => {

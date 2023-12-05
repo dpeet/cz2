@@ -35,8 +35,6 @@ export default function System(props) {
     const [systemFanModeButtonLabel, setSystemFanModeButtonLabel] = useState('');
     const [lastUpdated, setLastUpdated] = useState('Never');
 
-    const status = import.meta.env.PROD ? 'production' : 'development';
-
     useEffect(() => { setCZ2Status(props.status) }, [props.status]);
 
     useEffect(() => {
@@ -82,7 +80,7 @@ export default function System(props) {
     const handleSystemModeChange = (event) => {
         setSystemModeSelection(event.target.value);
         setIsSystemModeChangeLoading(true);
-        axios.get(`https://nodered.mtnhouse.dpeet.net/hvac/system/mode?mode=${event.target.value}`)
+        axios.get(`https://nodered.mtnhouse.casa/hvac/system/mode?mode=${event.target.value}`)
             .then((response) => {
                 console.log(response.data)
                 setIsSystemModeChangeLoading(false)
@@ -100,7 +98,7 @@ export default function System(props) {
         let fan_mode_desired = null
         if (systemFanMode === "Auto") fan_mode_desired = "always_on"
         if (systemFanMode === "Always On") fan_mode_desired = "auto"
-        axios.get(`https://nodered.mtnhouse.dpeet.net/hvac/system/fan?fan=${fan_mode_desired}`)
+        axios.get(`https://nodered.mtnhouse.casa/hvac/system/fan?fan=${fan_mode_desired}`)
             .then((response) => {
                 console.log(response.data)
                 if (systemFanMode === "Auto") {
@@ -126,7 +124,7 @@ export default function System(props) {
         let all_mode_desired = null
         if (allMode === 1) all_mode_desired = "off"
         if (allMode === 0) all_mode_desired = "on"
-        axios.get(`https://nodered.mtnhouse.dpeet.net/hvac/system/allmode?mode=${all_mode_desired}`)
+        axios.get(`https://nodered.mtnhouse.casa/hvac/system/allmode?mode=${all_mode_desired}`)
             .then((response) => {
                 console.log(response.data)
                 if (allMode === 1) {
@@ -150,7 +148,7 @@ export default function System(props) {
         event.preventDefault();
         setIsTempChangeLoading(true);
 
-        axios.get(`https://nodered.mtnhouse.dpeet.net/hvac/settemp?mode=${modeSelection}&temp=${targetTemperatureSelection}&zone=${zoneSelection}`)
+        axios.get(`https://nodered.mtnhouse.casa/hvac/settemp?mode=${modeSelection}&temp=${targetTemperatureSelection}&zone=${zoneSelection}`)
             .then((response) => {
                 console.log(response.data)
                 setIsTempChangeLoading(false)
