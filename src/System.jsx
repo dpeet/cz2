@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
-import Thermostat from './thermostat';
 import './App.scss';
-import axios from 'axios';
+
+import { useEffect, useState } from 'react';
+
 import CircleLoader from "react-spinners/CircleLoader";
+import Thermostat from './thermostat';
+import axios from 'axios';
 
 export default function System(props) {
     const [CZ2Status, setCZ2Status] = useState(props.status);
@@ -55,7 +57,7 @@ export default function System(props) {
             setZone3Hold(CZ2Status['zones'][2]['hold']);
             setAllMode(CZ2Status['all_mode']);
             CZ2Status['all_mode'] === 1 ? setZoneSelection("all") : null;
-            if (CZ2Status['all_mode'] === 1) setAllModeButtonLabel("Set All Mode Off")
+            if (CZ2Status['all_mode'] >= 1 && CZ2Status['all_mode'] <= 8) setAllModeButtonLabel("Set All Mode Off")
             else if (CZ2Status['all_mode'] === 0) setAllModeButtonLabel("Set All Mode On")
             setSystemMode(CZ2Status['system_mode']);
             setSystemFanMode(CZ2Status['fan_mode']);
@@ -127,12 +129,12 @@ export default function System(props) {
         axios.get(`https://nodered.mtnhouse.casa/hvac/system/allmode?mode=${all_mode_desired}`)
             .then((response) => {
                 console.log(response.data)
-                if (allMode === 1) {
-                    setAllMode(0);
-                    setAllModeButtonLabel("Set On")
+                if (allMode >= 1 && allMode <= 8) {
+                    setAllMode(allMode);
+                    setAllModeButtonLabel("Set Off")
                 }
                 else if (allMode === 0) {
-                    setAllMode(1);
+                    setAllMode(0);
                     setAllModeButtonLabel("Set On")
 
                 }
@@ -248,7 +250,7 @@ export default function System(props) {
                     <div className='system_status_item'>
                         <div className='system_status_item_label'>
                             <p>All Mode</p>
-                            {allMode == 1 && <h2>On</h2>}
+                            {allMode >= 1 && allMode <= 8 && <h2>On</h2>}
                             {allMode == 0 && <h2>Off</h2>}
                             {allMode == null && <h2>Unknown</h2>}
                         </div>
