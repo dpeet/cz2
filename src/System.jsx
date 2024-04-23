@@ -1,10 +1,10 @@
 import './App.scss';
 
+import axios, { all } from 'axios';
 import { useEffect, useState } from 'react';
 
 import CircleLoader from "react-spinners/CircleLoader";
 import Thermostat from './thermostat';
-import axios from 'axios';
 
 export default function System(props) {
     const [CZ2Status, setCZ2Status] = useState(props.status);
@@ -31,6 +31,8 @@ export default function System(props) {
     const [isSystemModeChangeLoading, setIsSystemModeChangeLoading] = useState(false);
     const [isFanModeChangeLoading, setIsFanModeChangeLoading] = useState(false);
     const [isAllModeChangeLoading, setIsAllModeChangeLoading] = useState(false);
+    const [isHoldStatusChangeLoading, setIsHoldStatusChangeLoading] = useState(false);
+    const [allHoldStatusButtonLabel, setAllHoldStatusButtonLabel] = useState('Set Hold On');
     const [systemMode, setSystemMode] = useState('Unknown');
     const [systemModeSelection, setSystemModeSelection] = useState('');
     const [systemFanMode, setSystemFanMode] = useState('Unknown');
@@ -55,6 +57,8 @@ export default function System(props) {
             setZone1Hold(CZ2Status['zones'][0]['hold']);
             setZone2Hold(CZ2Status['zones'][1]['hold']);
             setZone3Hold(CZ2Status['zones'][2]['hold']);
+            if (CZ2Status['zones'][0]['hold'] >= 1 || CZ2Status['zones'][1]['hold'] >= 1 || CZ2Status['zones'][2]['hold'] >= 1) setAllHoldStatusButtonLabel("Set Hold Off")
+            else if (CZ2Status['zones'][0]['hold'] == 0 && CZ2Status['zones'][1]['hold'] == 0 && CZ2Status['zones'][2]['hold'] == 0) setAllHoldStatusButtonLabel("Set Hold On")
             setAllMode(CZ2Status['all_mode']);
             CZ2Status['all_mode'] === 1 ? setZoneSelection("all") : null;
             if (CZ2Status['all_mode'] >= 1 && CZ2Status['all_mode'] <= 8) setAllModeButtonLabel("Set All Mode Off")
@@ -124,7 +128,7 @@ export default function System(props) {
         // ie buttonlabel should update automatically, not be set everywhere
         setIsAllModeChangeLoading(true);
         let all_mode_desired = null
-        if (allMode === 1) all_mode_desired = "off"
+        if ( allMode >= 1 && allMode <= 8) all_mode_desired = "off"
         if (allMode === 0) all_mode_desired = "on"
         axios.get(`https://nodered.mtnhouse.casa/hvac/system/allmode?mode=${all_mode_desired}`)
             .then((response) => {
@@ -144,6 +148,50 @@ export default function System(props) {
                 console.log(error)
                 setIsAllModeChangeLoading(false)
             })
+    }
+
+    const handleHoldStatusChange = (event) => {
+        if (allMode){
+            setIsHoldStatusChangeLoading(true);
+            let hold_status_desired = null
+            if (zone1Hold >= 1 || zone2Hold >= 1 || zone3Hold >= 1) {
+                hold_status_desired = "off"
+                axios.get(`https://nodered.mtnhouse.casa/hvac/sethold?zone=${zone1Hold}&setHold=${hold_status_desired}`)
+                .then((response) => {
+                    console.log(response.data)
+                    setZone1Hold(1);
+                    setZone2Hold(1);
+                    setZone3Hold(1);
+                    setAllHoldStatusButtonLabel("Set Hold On")
+                    setIsHoldStatusChangeLoading(false)
+                }).catch(error => {
+                    console.log("holdStatus broken")
+                    console.log(error)
+                    setIsHoldStatusChangeLoading(false)
+                })
+            }
+            else if (zone1Hold == 0 && zone2Hold == 0 && zone3Hold == 0) {
+                hold_status_desired = "on"
+                axios.get(`https://nodered.mtnhouse.casa/hvac/sethold?zone=all&setHold=${hold_status_desired}`)
+                .then((response) => {
+                    console.log(response.data)
+                    setZone1Hold(allMode);
+                    setZone2Hold(allMode);
+                    setZone3Hold(allMode);
+                    setAllHoldStatusButtonLabel("Set Hold Off")
+                    setIsHoldStatusChangeLoading(false)
+                }).catch(error => {
+                    console.log("holdStatus broken")
+                    console.log(error)
+                    setIsHoldStatusChangeLoading(false)
+                })
+            }
+            else console.log("holdStatus numbers broken")
+            
+        }
+        
+        
+
     }
 
     const handleTempChangeSubmit = (event) => {
@@ -260,13 +308,40 @@ export default function System(props) {
                             {(allMode !== null && !isAllModeChangeLoading) && 
                             <button className="system" type="submit" onClick={handleAllModeChange}>
                                 {allModeButtonLabel}
-                                </button> }
-                           
-
+                                </button> }                
                         </div>
+                        
                         {/* TODO right now this only loads while the mode is changed, but doesn't wait for an update */}
                         {/* <CircleLoader loading={} size={20} /> */}
                     </div>
+                    
+                </div>
+                <div className='hold_control'>
+                    <h2 className='change_hold'>Change Hold</h2>
+                    <form className='hold-form'>
+                        {allMode ?
+                        <div>
+                            <div className="form-group">
+                                {zone1Hold >= 1 || zone2Hold >= 1 || zone3Hold >= 1 ? <h2>On</h2> : <h2>Off</h2>}
+                            </div>
+                            <div className='form-group'>
+                                {isHoldStatusChangeLoading && <button className="system_disabled" type="submit" disabled> <CircleLoader size={16} /> Loading...</button>}
+                                {!isHoldStatusChangeLoading && <button className="system" type="submit" onClick={handleHoldStatusChange}>
+                                    {allHoldStatusButtonLabel} </button>}
+                            </div>
+                        </div>
+                        :
+                        <div className="form-group">
+                            <label>Zone</label>
+                            <select value={zoneSelection} onChange={handleTempZoneChange} required>
+                                <option value="">Select Zone</option>
+                                <option value="all">All</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                            </select>
+                        </div>}
+                    </form>
                 </div>
                 <div className='temp_control'>
                     <h2 className='change_temp'>Change Temperature</h2>
