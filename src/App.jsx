@@ -1,8 +1,11 @@
-import { useEffect, useState, useRef } from 'react';
-import mqtt from 'precompiled-mqtt';
 import './App.scss';
-import { data } from './json_response';
+
+import { useEffect, useRef, useState } from 'react';
+
 import System from './System';
+import { data } from './json_response';
+import mqtt from 'mqtt';
+import mqttp from 'precompiled-mqtt';
 
 export default function App() {
   const [connectionStatus, setConnectionStatus] = useState("Not Connected");
@@ -12,6 +15,7 @@ export default function App() {
   const [display, setDisplay] = useState(false);
 
   useEffect(() => {
+    // const client = mqttp.connect("wss://mqtt.mtnhouse.casa");
     const client = mqtt.connect("wss://mqtt.mtnhouse.casa");
 
     // if (connectionStatus !== "Connected") {
