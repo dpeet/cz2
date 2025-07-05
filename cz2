@@ -13,7 +13,8 @@ use POSIX qw(strftime);
 
 ###############################################################################
 
-my $config  = $ENV{CZ2_CONFIG} || "$ENV{HOME}/.cz2";
+# my $config  = $ENV{CZ2_CONFIG} || "$ENV{HOME}/.cz2";
+my $config  = $ENV{CZ2_CONFIG} || "/media/data/0/git/cz2/.cz2";
 my $connect = $ENV{CZ2_CONNECT};
 my $zones   = $ENV{CZ2_ZONES};
 my $id      = $ENV{CZ2_ID};
@@ -681,7 +682,7 @@ if ($action eq "" or $action eq "help") {
   for my $zone (@zones) {
     while (my ($key, $value) = each %$args) {
 
-      if    ($key eq "heat") { die "Invalid heat setpoint for zone $zone\n" if ($value < 55 or $value > 74) }
+      if    ($key eq "heat") { die "Invalid heat setpoint for zone $zone\n" if ($value < 45 or $value > 74) }
       if    ($key eq "cool") { die "Invalid cool setpoint for zone $zone\n" if ($value < 64 or $value > 99) }
 
       if    ($key eq "heat") { set_field     ($c, $data, 1, 1, 16, 10+$zone,          $value) }

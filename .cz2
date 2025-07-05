@@ -1,0 +1,18 @@
+# Configuration file for cz2
+
+# Connection string. This should be hostname:port if you're using
+# a TCP connection, or /dev/ttyXXX for a serial connection.
+#
+connect = 10.0.1.20:8899
+
+# Zone count OR list of zone names. This can be an integer number
+# of zones, or a comma-separated list of zone names. The zone
+# names, if supplied, are only used for status display.
+#
+zones = Main Room, Upstairs Bedroom, Downstairs, Unused
+
+# Device ID number to use on the serial bus. This must be unique.
+# OPTIONAL (defaults to 99) and you shouldn't need to change this
+# unless you're running multiple instances of this script.
+#
+# id = 99
