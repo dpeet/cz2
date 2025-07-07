@@ -15,7 +15,7 @@ app.add_typer(cli.app, name="cli")
 
 
 @app.command()
-def api_server():
+def api_server() -> None:
     """
     Runs the FastAPI web server and MQTT background task.
     """

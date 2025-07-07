@@ -1,7 +1,7 @@
 # src/pycz2/config.py
 import logging.config
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,14 +31,14 @@ class Settings(BaseSettings):
 
     @field_validator("CZ_ZONE_NAMES", mode="before")
     @classmethod
-    def split_zone_names(cls, v):
+    def split_zone_names(cls, v: str | list[str] | None) -> list[str] | None:
         if isinstance(v, str):
             return [name.strip() for name in v.split(",") if name.strip()]
         return v
 
     @field_validator("CZ_ZONE_NAMES")
     @classmethod
-    def validate_zone_names_count(cls, v, info):
+    def validate_zone_names_count(cls, v: list[str] | None, info: ValidationInfo) -> list[str] | None:
         if v is not None and "CZ_ZONES" in info.data:
             if len(v) != info.data["CZ_ZONES"]:
                 raise ValueError(

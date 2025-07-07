@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 
 
 class MqttClient:
-    def __init__(self):
+    def __init__(self) -> None:
         self._client = mqtt.Client(
             hostname=settings.MQTT_HOST,
             port=settings.MQTT_PORT,
@@ -20,7 +20,7 @@ class MqttClient:
         )
         self.status_topic = f"{settings.MQTT_TOPIC_PREFIX}/status"
 
-    async def connect(self):
+    async def connect(self) -> None:
         try:
             await self._client.connect()
             log.info(
@@ -31,11 +31,11 @@ class MqttClient:
             # Depending on requirements, you might want to retry or exit
             raise
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         await self._client.disconnect()
         log.info("Disconnected from MQTT broker.")
 
-    async def publish_status(self, status: SystemStatus):
+    async def publish_status(self, status: SystemStatus) -> None:
         if not settings.MQTT_ENABLED:
             return
         try:

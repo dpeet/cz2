@@ -36,7 +36,7 @@ class ComfortZoneIIClient:
         self._buffer = b""
         self._is_serial = ":" not in self.connect_str
 
-    async def connect(self):
+    async def connect(self) -> None:
         if self.is_connected():
             return
         log.info(f"Connecting to {self.connect_str}...")
@@ -62,7 +62,7 @@ class ComfortZoneIIClient:
             log.error(f"Failed to connect to {self.connect_str}: {e}")
             raise
 
-    async def close(self):
+    async def close(self) -> None:
         if self.writer:
             self.writer.close()
             await self.writer.wait_closed()
@@ -74,7 +74,7 @@ class ComfortZoneIIClient:
         return self.writer is not None and not self.writer.is_closing()
 
     @asynccontextmanager
-    async def connection(self):
+    async def connection(self) -> AsyncGenerator[None, None]:
         await self.connect()
         try:
             yield
@@ -83,7 +83,7 @@ class ComfortZoneIIClient:
 
     __aenter__ = connection
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         await self.close()
 
     async def _read_data(self, num_bytes: int) -> bytes:
@@ -99,7 +99,7 @@ class ComfortZoneIIClient:
             await self.close()
             raise ConnectionAbortedError from e
 
-    async def _write_data(self, data: bytes):
+    async def _write_data(self, data: bytes) -> None:
         if not self.writer:
             raise ConnectionError("Not connected.")
         self.writer.write(data)
@@ -167,7 +167,7 @@ class ComfortZoneIIClient:
             destination=dest, function=Function.read, data=[0, table, row]
         )
 
-    async def write_row(self, dest: int, table: int, row: int, data: list[int]):
+    async def write_row(self, dest: int, table: int, row: int, data: list[int]) -> None:
         full_data = [0, table, row] + data
         reply = await self.send_with_reply(
             destination=dest, function=Function.write, data=full_data
@@ -184,7 +184,7 @@ class ComfortZoneIIClient:
 
         return self._parse_status_from_cache(data_cache)
 
-    def _parse_status_from_cache(self, data: dict) -> SystemStatus:
+    def _parse_status_from_cache(self, data: dict[str, list[int]]) -> SystemStatus:
         # Helper to safely decode temperature
         def decode_temp(high: int, low: int) -> int:
             val = (high << 8) | low
@@ -213,12 +213,13 @@ class ComfortZoneIIClient:
         compressor_on = bool(data["9.5"][3] & 0x03)
         aux_heat_on = bool(data["9.5"][3] & 0x0C)
 
+        effective_mode_val = EFFECTIVE_MODE_MAP.get(e_mode, SystemMode.OFF)
         active_state = "Cool Off"
-        if e_mode in (SYSTEM_MODE_MAP.get(0), SYSTEM_MODE_MAP.get(3)):  # Heat or EHeat
+        if effective_mode_val in (SystemMode.HEAT, SystemMode.EHEAT):  # Heat or EHeat
             active_state = "Heat Off"
         if compressor_on:
             active_state = "Cool On"
-            if e_mode in (SYSTEM_MODE_MAP.get(0), SYSTEM_MODE_MAP.get(3)):
+            if effective_mode_val in (SystemMode.HEAT, SystemMode.EHEAT):
                 active_state = "Heat On"
         if aux_heat_on:
             active_state += " [AUX]"
@@ -226,7 +227,7 @@ class ComfortZoneIIClient:
         status = SystemStatus(
             system_time=system_time,
             system_mode=SYSTEM_MODE_MAP.get(s_mode, SystemMode.OFF),
-            effective_mode=EFFECTIVE_MODE_MAP.get(e_mode, SystemMode.OFF),
+            effective_mode=effective_mode_val,
             fan_mode=FAN_MODE_MAP.get(fan_mode_raw, FanMode.AUTO),
             fan_state="On" if fan_on else "Off",
             active_state=active_state,
@@ -258,7 +259,7 @@ class ComfortZoneIIClient:
 
     async def set_system_mode(
         self, mode: SystemMode | None, all_zones_mode: bool | None
-    ):
+    ) -> None:
         if mode is None and all_zones_mode is None:
             return
 
@@ -273,7 +274,7 @@ class ComfortZoneIIClient:
 
         await self.write_row(1, 1, 12, data)
 
-    async def set_fan_mode(self, fan_mode: FanMode):
+    async def set_fan_mode(self, fan_mode: FanMode) -> None:
         frame = await self.read_row(1, 1, 17)
         data = frame.data[3:]
 
@@ -294,7 +295,7 @@ class ComfortZoneIIClient:
         temporary_hold: bool | None = None,
         hold: bool | None = None,
         out_mode: bool | None = None,
-    ):
+    ) -> None:
         # Read existing data rows first to modify them
         row12_frame = await self.read_row(1, 1, 12)
         row16_frame = await self.read_row(1, 1, 16)
@@ -302,7 +303,7 @@ class ComfortZoneIIClient:
         data16 = row16_frame.data[3:]
 
         for zone_id in zones:
-            if not (1 <= zone_id <= self.zone_count):
+            if not 1 <= zone_id <= self.zone_count:
                 continue
             z_idx = zone_id - 1
             bit = 1 << z_idx

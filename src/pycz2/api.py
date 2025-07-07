@@ -1,6 +1,7 @@
 # src/pycz2/api.py
 import asyncio
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -24,14 +25,14 @@ background_tasks = set()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     log.info("Starting pycz2 API server...")
     if settings.MQTT_ENABLED:
         mqtt_client = get_mqtt_client()
         await mqtt_client.connect()
 
-        async def mqtt_publisher_task():
+        async def mqtt_publisher_task() -> None:
             while True:
                 try:
                     await asyncio.sleep(settings.MQTT_PUBLISH_INTERVAL)
@@ -92,7 +93,7 @@ async def get_status_and_publish(
 async def get_current_status(
     client: ComfortZoneIIClient = Depends(get_client),
     lock: asyncio.Lock = Depends(get_lock),
-):
+) -> SystemStatus:
     """Get the current system status."""
     async with lock:
         try:
@@ -109,7 +110,7 @@ async def force_update_and_publish(
     client: ComfortZoneIIClient = Depends(get_client),
     mqtt_client: MqttClient = Depends(get_mqtt_client),
     lock: asyncio.Lock = Depends(get_lock),
-):
+) -> SystemStatus:
     """
     Force a status refresh from the HVAC system and publish it to MQTT.
     This replaces the periodic trigger from Node-RED.
@@ -124,7 +125,7 @@ async def set_system_mode(
     client: ComfortZoneIIClient = Depends(get_client),
     mqtt_client: MqttClient = Depends(get_mqtt_client),
     lock: asyncio.Lock = Depends(get_lock),
-):
+) -> SystemStatus:
     """Set the main system mode (heat, cool, auto, etc.)."""
     async with lock:
         await client.set_system_mode(mode=args.mode, all_zones_mode=args.all)
@@ -137,7 +138,7 @@ async def set_system_fan(
     client: ComfortZoneIIClient = Depends(get_client),
     mqtt_client: MqttClient = Depends(get_mqtt_client),
     lock: asyncio.Lock = Depends(get_lock),
-):
+) -> SystemStatus:
     """Set the system fan mode (auto, on)."""
     async with lock:
         await client.set_fan_mode(args.fan)
@@ -151,12 +152,12 @@ async def set_zone_temperature(
     client: ComfortZoneIIClient = Depends(get_client),
     mqtt_client: MqttClient = Depends(get_mqtt_client),
     lock: asyncio.Lock = Depends(get_lock),
-):
+) -> SystemStatus:
     """
     Set the heating and/or cooling setpoints for a specific zone.
     You must also set `hold` or `temp` to true for the change to stick.
     """
-    if not (1 <= zone_id <= settings.CZ_ZONES):
+    if not 1 <= zone_id <= settings.CZ_ZONES:
         raise HTTPException(status_code=404, detail=f"Zone {zone_id} not found.")
 
     async with lock:
@@ -178,9 +179,9 @@ async def set_zone_hold(
     client: ComfortZoneIIClient = Depends(get_client),
     mqtt_client: MqttClient = Depends(get_mqtt_client),
     lock: asyncio.Lock = Depends(get_lock),
-):
+) -> SystemStatus:
     """Set or release the hold/temporary status for a zone."""
-    if not (1 <= zone_id <= settings.CZ_ZONES):
+    if not 1 <= zone_id <= settings.CZ_ZONES:
         raise HTTPException(status_code=404, detail=f"Zone {zone_id} not found.")
 
     async with lock:

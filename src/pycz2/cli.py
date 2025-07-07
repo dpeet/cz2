@@ -1,5 +1,7 @@
 # src/pycz2/cli.py
 import asyncio
+from collections.abc import Coroutine
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -27,12 +29,12 @@ async def get_client() -> ComfortZoneIIClient:
     )
 
 
-def run_async(coro):
+def run_async(coro: Coroutine[Any, Any, None]) -> None:
     """Helper to run an async function from a sync Typer command."""
-    return asyncio.run(coro)
+    asyncio.run(coro)
 
 
-def print_status(status: SystemStatus):
+def print_status(status: SystemStatus) -> None:
     """Prints the status in a human-readable format."""
     console.print(f"[bold]System Time:[/] {status.system_time}")
     console.print(
@@ -94,12 +96,12 @@ def print_status(status: SystemStatus):
 
 
 @app.command()
-def status():
+def status() -> None:
     """Print an overview of the current system status."""
 
-    async def _status():
+    async def _status() -> None:
         client = await get_client()
-        async with client:
+        async with client.connection():
             s = await client.get_status_data()
             print_status(s)
 
@@ -107,12 +109,12 @@ def status():
 
 
 @app.command()
-def status_json():
+def status_json() -> None:
     """Print the status information in JSON format."""
 
-    async def _status_json():
+    async def _status_json() -> None:
         client = await get_client()
-        async with client:
+        async with client.connection():
             s = await client.get_status_data()
             console.print_json(s.model_dump_json(indent=2))
 
@@ -128,16 +130,16 @@ def set_system(
     all_mode: bool | None = typer.Option(
         None, "--all/--no-all", help="Enable/disable 'all zones' mode."
     ),
-):
+) -> None:
     """Set system-wide options."""
 
-    async def _set_system():
+    async def _set_system() -> None:
         if all(v is None for v in [mode, fan, all_mode]):
             console.print("[red]Error:[/] No options specified. Use --help for info.")
             raise typer.Exit(code=1)
 
         client = await get_client()
-        async with client:
+        async with client.connection():
             if mode is not None or all_mode is not None:
                 await client.set_system_mode(mode, all_mode)
             if fan is not None:
@@ -161,12 +163,12 @@ def set_zone(
     ),
     hold: bool = typer.Option(False, "--hold", help="Enable 'hold' mode."),
     out: bool = typer.Option(False, "--out", help="Enable 'out' mode."),
-):
+) -> None:
     """Set options for one or more zones."""
 
-    async def _set_zone():
+    async def _set_zone() -> None:
         client = await get_client()
-        async with client:
+        async with client.connection():
             await client.set_zone_setpoints(
                 zones=zones,
                 heat_setpoint=heat,
@@ -183,12 +185,12 @@ def set_zone(
 
 
 @app.command()
-def monitor():
+def monitor() -> None:
     """Passively monitor all serial traffic and print each frame observed."""
 
-    async def _monitor():
+    async def _monitor() -> None:
         client = await get_client()
-        async with client:
+        async with client.connection():
             console.print("Monitoring bus traffic... Press Ctrl+C to stop.")
             async for frame in client.monitor_bus():
                 console.print(
@@ -205,12 +207,12 @@ def read_row(
     dest: int = typer.Argument(..., help="Destination device ID."),
     table: int = typer.Argument(..., help="Table number."),
     row: int = typer.Argument(..., help="Row number."),
-):
+) -> None:
     """Send a read request for one row and print the data received."""
 
-    async def _read():
+    async def _read() -> None:
         client = await get_client()
-        async with client:
+        async with client.connection():
             reply_frame = await client.read_row(dest, table, row)
             console.print(".".join(map(str, reply_frame.data)))
 
