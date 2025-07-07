@@ -1,6 +1,5 @@
 # tests/core/test_client.py
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from tenacity import RetryError
