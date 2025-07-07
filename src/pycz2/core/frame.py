@@ -1,13 +1,11 @@
 # src/pycz2/core/frame.py
-from typing import List
+from typing import Any
 
 from construct import (
     Array,
     Byte,
-    Checksum,
     Computed,
     Const,
-    Default,
     Enum,
     GreedyBytes,
     Int16ub,
@@ -17,16 +15,18 @@ from construct import (
     Struct,
     this,
 )
-from crc import CrcCalculator, Crc16
+from crc import Calculator, Configuration
 
 from .constants import Function
 
 # CRC-16/CCITT-FALSE as used by the original Perl Digest::CRC
-CRC_CALCULATOR = CrcCalculator(Crc16.CCITT_FALSE)
+# polynomial: 0x1021, init: 0xFFFF, xor_out: 0x0000, reverse: False
+CRC_CONFIG = Configuration(16, 0x1021, 0xFFFF, 0x0000, False, False)
+CRC_CALCULATOR = Calculator(CRC_CONFIG)
 
 
-def Crc16Ccitt(data):
-    return CRC_CALCULATOR.calculate_checksum(data)
+def Crc16Ccitt(data: bytes) -> int:
+    return CRC_CALCULATOR.checksum(data)
 
 
 # The structure for testing if a slice of buffer contains a valid frame
@@ -45,22 +45,29 @@ FrameStruct = Struct(
     Const(b"\x00"),
     "length" / Byte,
     Const(b"\x00\x00"),
-    "function" / Enum(Byte, **{f.name: f.value for f in Function}, default=Function.error),
+    "function"
+    / Enum(Byte, **{f.name: f.value for f in Function}, default=Function.error),
     "data" / Array(this.length, Byte),
-    "checksum" / Checksum(Int16ub, Crc16Ccitt, this._.data),
+    # Just read the checksum value, validation happens separately
+    "checksum" / Int16ub,
 )
 
 # Combine the two for a single parsing object
 # It first finds a valid frame using the tester, then parses it fully.
-CZFrame = FrameTestStruct * FrameStruct
+# Note: The * operator approach doesn't work in newer construct versions
+# CZFrame would need to be implemented differently if needed
 
+# Type alias for parsed frame
+CZFrame = Any  # This represents the parsed frame structure from construct
 
 # Alias for convenience
 FRAME_TESTER = FrameTestStruct
 FRAME_PARSER = FrameStruct
 
 
-def build_message(destination: int, source: int, function: Function, data: List[int]) -> bytes:
+def build_message(
+    destination: int, source: int, function: Function, data: list[int]
+) -> bytes:
     """Builds a message frame to be sent over the wire."""
     header_data = {
         "destination": destination,
@@ -82,4 +89,4 @@ def build_message(destination: int, source: int, function: Function, data: List[
 
     payload = header + bytes(data)
     checksum = Crc16Ccitt(payload)
-    return payload + checksum.to_bytes(2, "big")
+    return bytes(payload + checksum.to_bytes(2, "big"))
