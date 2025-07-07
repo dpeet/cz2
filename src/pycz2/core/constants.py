@@ -64,3 +64,6 @@ READ_QUERIES = [
 # Damper position calculation divisor
 DAMPER_DIVISOR = 15.0
 assert DAMPER_DIVISOR > 0, "Damper divisor must be positive"
+
+# Maximum attempts to find a reply frame amongst bus crosstalk
+MAX_REPLY_ATTEMPTS = 5

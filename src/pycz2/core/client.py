@@ -4,6 +4,7 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from functools import lru_cache
+from types import TracebackType
 
 import pyserial_asyncio
 from construct import ConstError, StreamError
@@ -14,6 +15,7 @@ from .constants import (
     EFFECTIVE_MODE_MAP,
     FAN_MODE_MAP,
     MAX_MESSAGE_SIZE,
+    MAX_REPLY_ATTEMPTS,
     MIN_MESSAGE_SIZE,
     READ_QUERIES,
     SYSTEM_MODE_MAP,
@@ -111,7 +113,12 @@ class ComfortZoneIIClient:
 
     __aenter__ = connection
 
-    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         await self.close()
 
     async def _read_data(self, num_bytes: int) -> bytes:
@@ -199,7 +206,7 @@ class ComfortZoneIIClient:
         )
         await self._write_data(message)
 
-        for _ in range(5):  # Try to find our reply amongst crosstalk
+        for _ in range(MAX_REPLY_ATTEMPTS):  # Try to find our reply amongst crosstalk
             reply = await self.get_frame()
             if reply.destination != self.device_id:
                 continue
