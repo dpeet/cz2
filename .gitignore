@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Unit test / coverage reports
+.coverage
+.coverage.*
+*.cover
+.pytest_cache/
+htmlcov/
+
+# Environments
+.env
+.venv
+venv/
+env/
+
+# Type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+.ruff_cache/
+
+# IDEs
+.vscode/
+*.code-workspace
+.idea/
+
+# Package managers
+.uv/
+
+# macOS
+.DS_Store
+._*
+*.icloud
+
+# Project specific
+*.log
+digest.txt
