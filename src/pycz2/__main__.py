@@ -1,7 +1,8 @@
 # src/pycz2/__main__.py
 import typer
-from . import cli, api
 import uvicorn
+
+from . import cli
 from .config import settings
 
 app = typer.Typer(

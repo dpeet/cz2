@@ -1,26 +1,27 @@
 # src/pycz2/core/client.py
 import asyncio
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from functools import lru_cache
-from typing import AsyncGenerator, List, Optional
+from typing import List, Optional
 
 import pyserial_asyncio
-from tenacity import retry, stop_after_attempt, wait_fixed, RetryError
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .constants import (
-    MAX_MESSAGE_SIZE,
-    MIN_MESSAGE_SIZE,
-    Function,
-    SystemMode,
-    FanMode,
-    SYSTEM_MODE_MAP,
     EFFECTIVE_MODE_MAP,
     FAN_MODE_MAP,
-    WEEKDAY_MAP,
+    MAX_MESSAGE_SIZE,
+    MIN_MESSAGE_SIZE,
     READ_QUERIES,
+    SYSTEM_MODE_MAP,
+    WEEKDAY_MAP,
+    FanMode,
+    Function,
+    SystemMode,
 )
-from .frame import CZFrame, FRAME_PARSER, FRAME_TESTER, build_message
+from .frame import FRAME_PARSER, FRAME_TESTER, CZFrame, build_message
 from .models import SystemStatus, ZoneStatus
 
 log = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ class ComfortZoneIIClient:
         self.reader: Optional[asyncio.StreamReader] = None
         self.writer: Optional[asyncio.StreamWriter] = None
         self._buffer = b""
-        self._is_serial = not (":" in self.connect_str)
+        self._is_serial = ":" not in self.connect_str
 
     async def connect(self):
         if self.is_connected():
@@ -137,7 +138,7 @@ class ComfortZoneIIClient:
             if reply.destination != self.device_id:
                 continue
             if reply.function == Function.error:
-                raise IOError(f"Error reply received: {reply.data}")
+                raise OSError(f"Error reply received: {reply.data}")
             if reply.function == Function.reply:
                 # Basic validation for read replies
                 if function == Function.read and len(data) >= 3 and len(reply.data) >= 3:
@@ -159,7 +160,7 @@ class ComfortZoneIIClient:
             destination=dest, function=Function.write, data=full_data
         )
         if reply.data[0] != 0:
-            raise IOError(f"Write failed with reply code {reply.data[0]}")
+            raise OSError(f"Write failed with reply code {reply.data[0]}")
 
     async def get_status_data(self) -> SystemStatus:
         data_cache = {}
@@ -243,29 +244,29 @@ class ComfortZoneIIClient:
 
     async def set_system_mode(self, mode: Optional[SystemMode], all_zones_mode: Optional[bool]):
         if mode is None and all_zones_mode is None: return
-        
+
         frame = await self.read_row(1, 1, 12)
         data = frame.data[3:] # Get writable part of the row
-        
+
         if mode is not None:
             mode_val = next(k for k, v in SYSTEM_MODE_MAP.items() if v == mode)
             data[4-3] = mode_val # byte 4 is mode
         if all_zones_mode is not None:
             data[15-3] = 1 if all_zones_mode else 0 # byte 15 is all_mode
-        
+
         await self.write_row(1, 1, 12, data)
 
     async def set_fan_mode(self, fan_mode: FanMode):
         frame = await self.read_row(1, 1, 17)
         data = frame.data[3:]
-        
+
         fan_val = next(k for k, v in FAN_MODE_MAP.items() if v == fan_mode)
-        
+
         # Fan mode is bit 2 of byte 3
         current_val = data[3-3]
         mask = ~(1 << 2)
         data[3-3] = (current_val & mask) | (fan_val << 2)
-        
+
         await self.write_row(1, 1, 17, data)
 
     async def set_zone_setpoints(
@@ -290,7 +291,7 @@ class ComfortZoneIIClient:
 
             if heat_setpoint is not None: data16[11 + z_idx - 3] = heat_setpoint
             if cool_setpoint is not None: data16[3 + z_idx - 3] = cool_setpoint
-            
+
             if temporary_hold is not None:
                 data12[9 - 3] = (data12[9 - 3] & ~bit) | (int(temporary_hold) << z_idx)
             if hold is not None:

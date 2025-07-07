@@ -1,9 +1,9 @@
 # src/pycz2/mqtt.py
-import json
 import logging
 from functools import lru_cache
 
 import asyncio_mqtt as mqtt
+
 from .config import settings
 from .core.models import SystemStatus
 

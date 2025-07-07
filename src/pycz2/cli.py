@@ -1,7 +1,5 @@
 # src/pycz2/cli.py
 import asyncio
-import json
-import logging
 from typing import List, Optional
 
 import typer

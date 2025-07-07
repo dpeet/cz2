@@ -2,20 +2,18 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import Depends, FastAPI, HTTPException
 from tenacity import RetryError
 
 from .config import settings
 from .core.client import ComfortZoneIIClient, get_client, get_lock
-from .core.constants import SystemMode, FanMode
 from .core.models import (
-    SystemStatus,
-    ZoneTemperatureArgs,
-    SystemModeArgs,
     SystemFanArgs,
+    SystemModeArgs,
+    SystemStatus,
     ZoneHoldArgs,
+    ZoneTemperatureArgs,
 )
 from .mqtt import MqttClient, get_mqtt_client
 
