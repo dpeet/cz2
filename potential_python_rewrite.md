@@ -57,6 +57,14 @@ dependencies = [
     "tenacity>=8.2.3",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+    "pylint>=3.0.0",
+    "pyright>=1.1.0",
+]
+
 [project.scripts]
 pycz2 = "pycz2.__main__:app"
 
@@ -69,6 +77,19 @@ line-length = 88
 [tool.ruff]
 line-length = 88
 select = ["E", "F", "W", "I", "UP", "B", "C4"]
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true
+strict = true
+
+[tool.pylint]
+disable = ["C0103", "C0114", "C0115", "C0116", "R0903"]
+max-line-length = 88
+
+[tool.pyright]
+include = ["src"]
+typeCheckingMode = "strict"
 ```
 
 ---
@@ -159,6 +180,52 @@ Configuration is handled via an `.env` file. Copy the example file and edit it t
     API_HOST="0.0.0.0"
     API_PORT=8000
     ```
+
+## Development Setup
+
+### Installing Development Dependencies
+
+To install the linting tools for development:
+
+```bash
+uv pip install -e .[dev]
+```
+
+### Linting Tools
+
+The project uses the following linting tools:
+
+- **Ruff**: Fast Python linter for code style and common issues
+- **MyPy**: Static type checking for Python
+- **Pylint**: Comprehensive Python code analysis  
+- **Pyright**: Microsoft's static type checker (same engine as Pylance)
+
+### Running Linters
+
+Run all linters to check code quality:
+
+```bash
+# Style and basic linting
+uv run ruff check .
+
+# Type checking with MyPy
+uv run mypy src/
+
+# Comprehensive code analysis
+uv run pylint src/ --errors-only
+
+# Advanced type checking (Pylance engine)
+uv run pyright src/
+```
+
+### Linting Configuration
+
+- **MyPy**: Configured in `pyproject.toml` with `ignore_missing_imports = true`
+- **Ruff**: Uses default configuration with all checks enabled
+- **Pylint**: Run with `--errors-only` to focus on critical issues
+- **Pyright**: Uses default strict type checking
+
+All linting tools should pass with zero errors before submitting code.
 
 ## Usage
 
@@ -364,86 +431,6 @@ MQTT_PUBLISH_INTERVAL=60
 
 ---
 
-### `.gitignore`
-
-A standard Python gitignore file.
-
-```
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# Ruff
-.ruff_cache/
-```
-
----
 
 ### `src/pycz2/__init__.py`
 

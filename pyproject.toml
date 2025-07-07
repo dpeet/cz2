@@ -1,0 +1,54 @@
+[project]
+name = "pycz2"
+version = "1.0.0"
+description = "A Python application to control and monitor Carrier ComfortZone II HVAC systems."
+authors = [{ name = "AI Assistant" }]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "typer[all]>=0.9.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "construct>=2.10.0",
+    "pyserial-asyncio>=0.6",
+    "paho-mqtt>=2.0.0",
+    "crc>=2.4.0",
+    "asyncio-mqtt>=0.17.0",
+    "tenacity>=8.2.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+    "pylint>=3.0.0",
+    "pyright>=1.1.0",
+]
+
+[project.scripts]
+pycz2 = "pycz2.__main__:app"
+
+[tool.uv.sources]
+pycz2 = { path = "src" }
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true
+strict = true
+
+[tool.pylint]
+disable = ["C0103", "C0114", "C0115", "C0116", "R0903"]
+max-line-length = 88
+
+[tool.pyright]
+include = ["src"]
+typeCheckingMode = "strict"

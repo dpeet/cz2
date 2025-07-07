@@ -1,87 +1,171 @@
-# cz2
+# pycz2 - Python Carrier ComfortZone II Controller
 
 ## Overview
 
-This script provides an interface for monitoring and controlling a
-Carrier ComfortZone II HVAC system from Linux.
+`pycz2` is a Python-based toolkit for monitoring and controlling a Carrier ComfortZone II HVAC system. It provides a command-line interface (CLI), a web API (using FastAPI), and an MQTT publisher to integrate your HVAC system with modern home automation platforms.
+
+This project is a complete rewrite of the original Perl `cz2` script, addressing its limitations and adding new features in a structured, modern Python application.
+
+## Features
+
+- **Command-Line Interface (CLI)**: Full-featured CLI for status checks, setting temperatures, changing modes, and low-level debugging.
+- **Web API**: A robust FastAPI server that exposes all control functions via simple HTTP endpoints, replacing the need for Node-RED wrappers.
+- **MQTT Integration**: A built-in MQTT publisher that periodically sends system status updates, perfect for Home Assistant or other automation systems.
+- **Modern and Robust**: Asynchronous I/O for efficient communication, proper error handling, and structured code.
+- **Easy Configuration**: All settings are managed via a standard `.env` file.
+- **Dependency Management**: Uses `uv` for fast and reliable dependency management.
 
 ## Pre-Requisites
 
-You'll need an RS-485 connection to your ComfortZone II panel. You can
-use a serial-to-USB adapter connected locally (usually via
-/dev/ttyUSB0), or a serial-to-network adapter for remote management.
-Personally, I use a
-[USR-W610](https://amazon.com/gp/product/B00QWYW8E4) in Transparent
-Mode, connected via WiFi. The proper serial parameters are 9600,8,N,1.
+1.  **Python 3.9+**
+2.  **`uv`**: A fast Python package installer and resolver. Install it with `pip install uv`.
+3.  **Hardware Connection**: An RS-485 connection to your ComfortZone II panel. This can be a local serial-to-USB adapter (e.g., `/dev/ttyUSB0`) or a remote serial-to-network adapter (e.g., a USR-W610). The required serial parameters are 9600 baud, 8 data bits, no parity, 1 stop bit (9600,8,N,1).
 
 ## Installation
 
-You'll need the following non-core perl modules:
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository_url>
+    cd pycz2
+    ```
 
-* Data::ParseBinary
-* Digest::CRC
-* IO::Termios (only if using a local serial connection)
-* JSON
-* Params::Validate
+2.  **Create a virtual environment:**
+    ```bash
+    uv venv
+    source .venv/bin/activate
+    ```
+
+3.  **Install dependencies:**
+    ```bash
+    uv pip install -e .
+    ```
+    This installs the project in editable mode.
 
 ## Configuration
 
-The `cz2` script has two parameters which must be configured for your
-installation, and one optional parameter. The preferred method of
-configuration is to create a file called `$HOME/.cz2` with the
-following syntax:
+Configuration is handled via an `.env` file. Copy the example file and edit it to match your setup.
 
-    # Configuration file for cz2
-    
-    # Connection string. This should be hostname:port if you're using
-    # a TCP connection, or /dev/ttyXXX for a serial connection.
-    #
-    connect = CHANGEME
-    
-    # Zone count OR list of zone names. This can be an integer number
-    # of zones, or a comma-separated list of zone names. The zone
-    # names, if supplied, are only used for status display.
-    #
-    zones = First Floor, Second Floor, Basement
+1.  **Copy the example file:**
+    ```bash
+    cp .env.example .env
+    ```
 
-    # Device ID number to use on the serial bus. This must be unique.
-    # OPTIONAL (defaults to 99) and you shouldn't need to change this
-    # unless you're running multiple instances of this script.
-    #
-    # id = 99
+2.  **Edit `.env`:**
 
-The following environment variables are also available:
+    ```dotenv
+    # Connection string: host:port for TCP or /dev/ttyS0 for serial
+    CZ_CONNECT="10.0.1.20:8899"
 
-* `CZ2_CONFIG`: Alternate path to configuration file
-* `CZ2_CONNECT`: Overrides the `connect` parameter
-* `CZ2_ZONES`: Overrides the `zones` parameter
-* `CZ2_ID`: Overrides the `id` parameter
+    # Number of zones in your system (1-8)
+    CZ_ZONES=4
 
-If both the `CZ2_CONNECT` and `CZ2_ZONES` environment variables are
-supplied, then the script won't attempt to read the configuration
-file.
+    # Optional: List of zone names (comma-separated)
+    CZ_ZONE_NAMES="Main Room,Upstairs Bedroom,Downstairs,Unused"
+
+    # Optional: Device ID for the script on the serial bus (must be unique)
+    CZ_ID=99
+
+    # --- MQTT Settings (Optional) ---
+    MQTT_HOST="your_mqtt_broker_ip"
+    MQTT_PORT=1883
+    MQTT_USER=""
+    MQTT_PASSWORD=""
+    # Base topic for publishing status data
+    MQTT_TOPIC_PREFIX="hvac/cz2"
+    # How often to publish status to MQTT (in seconds)
+    MQTT_PUBLISH_INTERVAL=60
+
+    # --- API Server Settings ---
+    API_HOST="0.0.0.0"
+    API_PORT=8000
+    ```
+
+## Development Setup
+
+### Installing Development Dependencies
+
+To install the linting tools for development:
+
+```bash
+uv pip install -e .[dev]
+```
+
+### Linting Tools
+
+The project uses the following linting tools:
+
+- **Ruff**: Fast Python linter for code style and common issues
+- **MyPy**: Static type checking for Python
+- **Pylint**: Comprehensive Python code analysis  
+- **Pyright**: Microsoft's static type checker (same engine as Pylance)
+
+### Running Linters
+
+Run all linters to check code quality:
+
+```bash
+# Style and basic linting
+uv run ruff check .
+
+# Type checking with MyPy
+uv run mypy src/
+
+# Comprehensive code analysis
+uv run pylint src/ --errors-only
+
+# Advanced type checking (Pylance engine)
+uv run pyright src/
+```
+
+### Linting Configuration
+
+- **MyPy**: Configured in `pyproject.toml` with `ignore_missing_imports = true`
+- **Ruff**: Uses default configuration with all checks enabled
+- **Pylint**: Run with `--errors-only` to focus on critical issues
+- **Pyright**: Uses default strict type checking
+
+All linting tools should pass with zero errors before submitting code.
 
 ## Usage
 
-Run `cz2` for usage information. The set of features supported should
-be enough for most needs.
+The application can be run as a CLI or as a web server.
 
-Carrier doesn't provide documentation on the protocol used by this
-system, but several people have helped with reverse-engineering. The
-most complete reference is currently on a wiki page of the
-[CZII_to_MQTT
-project](https://github.com/jwarcd/CZII_to_MQTT/wiki/Interpreting-Data).
-I've discovered many additional fields and have contributed the
-details to the owner of that project for inclusion in the wiki.
+### Web API & MQTT Publisher
 
-## Contributing
+To run the FastAPI server and the background MQTT publisher, use the `api` command:
 
-Most of the fields I've figured out have been using the `czdiff`
-script. I'll do my best to add more features upon request, especially
-if you can provide field-level details.
+```bash
+pycz2 api
+```
 
-You can also help by testing this script with different
-configurations. I only have remote access, so the direct serial
-connection support is untested. Also, my system has only basic remote
-sensors in each zone, not Smart Sensors, so I haven't tested with
-those.
+The API will be available at `http://<your_ip>:8000`. Interactive documentation (Swagger UI) is available at `http://<your_ip>:8000/docs`.
+
+#### API Endpoints
+
+-   `GET /status`: Get the current HVAC status.
+-   `POST /update`: Force a refresh of the HVAC status and publish to MQTT.
+-   `POST /system/mode`: Set the system mode (`heat`, `cool`, `auto`, `eheat`, `off`).
+-   `POST /system/fan`: Set the system fan mode (`auto`, `on`).
+-   `POST /zones/{zone_id}/temperature`: Set a zone's temperature setpoints.
+-   ... and more! Check the `/docs` page for a full list.
+
+### Command-Line Interface (CLI)
+
+The CLI provides the same functionality as the original Perl script.
+
+```bash
+# Get help
+pycz2 cli --help
+
+# Get system status
+pycz2 cli status
+
+# Set zone 1 heat to 68 degrees (in temporary mode)
+pycz2 cli set-zone 1 --heat 68 --temp
+
+# Set system mode to auto
+pycz2 cli set-system --mode auto
+
+# Monitor all raw bus traffic
+pycz2 cli monitor
+```
