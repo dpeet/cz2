@@ -75,22 +75,33 @@ async def get_status_and_publish(
             await mqtt_client.publish_status(status)
         return status
     except RetryError as e:
-        log.error(f"Failed to communicate with HVAC controller after multiple retries: {e}")
-        raise HTTPException(status_code=504, detail="Could not communicate with HVAC controller.")
+        log.error(
+            f"Failed to communicate with HVAC controller after multiple retries: {e}"
+        )
+        raise HTTPException(
+            status_code=504, detail="Could not communicate with HVAC controller."
+        ) from e
     except Exception as e:
         log.error(f"An unexpected error occurred: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An internal server error occurred.")
+        raise HTTPException(
+            status_code=500, detail="An internal server error occurred."
+        ) from e
 
 
 @app.get("/status", response_model=SystemStatus)
-async def get_current_status(client: ComfortZoneIIClient = Depends(get_client), lock: asyncio.Lock = Depends(get_lock)):
+async def get_current_status(
+    client: ComfortZoneIIClient = Depends(get_client),
+    lock: asyncio.Lock = Depends(get_lock),
+):
     """Get the current system status."""
     async with lock:
         try:
             return await client.get_status_data()
         except RetryError as e:
             log.error(f"Failed to get status: {e}")
-            raise HTTPException(status_code=504, detail="Could not communicate with HVAC controller.")
+            raise HTTPException(
+                status_code=504, detail="Could not communicate with HVAC controller."
+            ) from e
 
 
 @app.post("/update", response_model=SystemStatus)

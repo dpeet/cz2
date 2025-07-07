@@ -1,6 +1,5 @@
 # src/pycz2/cli.py
 import asyncio
-from typing import List, Optional
 
 import typer
 from rich.console import Console
@@ -40,10 +39,12 @@ def print_status(status: SystemStatus):
         f"[bold]Ambient:[/]\t    Outside {status.outside_temp}°F / Indoor humidity {status.zone1_humidity}%"
     )
     console.print(
-        f"[bold]Air Handler:[/] {status.air_handler_temp}°F, Fan {status.fan_state}, {status.active_state}"
+        f"[bold]Air Handler:[/] {status.air_handler_temp}°F, Fan "
+        f"{status.fan_state}, {status.active_state}"
     )
     console.print(
-        f"[bold]Mode:[/] \t    {status.system_mode.value} ({status.effective_mode.value}), Fan {status.fan_mode.value}"
+        f"[bold]Mode:[/] \t    {status.system_mode.value} "
+        f"({status.effective_mode.value}), Fan {status.fan_mode.value}"
     )
     console.print()
 
@@ -57,7 +58,11 @@ def print_status(status: SystemStatus):
     is_auto = status.system_mode == SystemMode.AUTO
 
     for i, zone in enumerate(status.zones):
-        zone_name = settings.CZ_ZONE_NAMES[i] if settings.CZ_ZONE_NAMES else f"Zone {zone.zone_id}"
+        zone_name = (
+            settings.CZ_ZONE_NAMES[i]
+            if settings.CZ_ZONE_NAMES
+            else f"Zone {zone.zone_id}"
+        )
         mode_str = ""
         if zone.hold:
             mode_str += "[HOLD] "
@@ -70,7 +75,9 @@ def print_status(status: SystemStatus):
             setpoint_str = "OUT"
         else:
             if is_auto:
-                setpoint_str = f"Cool {zone.cool_setpoint}° / Heat {zone.heat_setpoint}°"
+                setpoint_str = (
+                    f"Cool {zone.cool_setpoint}° / Heat {zone.heat_setpoint}°"
+                )
             elif status.effective_mode in (SystemMode.HEAT, SystemMode.EHEAT):
                 setpoint_str = f"Heat {zone.heat_setpoint}°"
             else:
@@ -114,9 +121,11 @@ def status_json():
 
 @app.command()
 def set_system(
-    mode: Optional[SystemMode] = typer.Option(None, "--mode", help="System operating mode."),
-    fan: Optional[FanMode] = typer.Option(None, "--fan", help="System fan mode."),
-    all_mode: Optional[bool] = typer.Option(
+    mode: SystemMode | None = typer.Option(
+        None, "--mode", help="System operating mode."
+    ),
+    fan: FanMode | None = typer.Option(None, "--fan", help="System fan mode."),
+    all_mode: bool | None = typer.Option(
         None, "--all/--no-all", help="Enable/disable 'all zones' mode."
     ),
 ):
@@ -142,10 +151,14 @@ def set_system(
 
 @app.command()
 def set_zone(
-    zones: List[int] = typer.Argument(..., help="One or more zone numbers (e.g., 1 3)."),
-    heat: Optional[int] = typer.Option(None, help="Heating setpoint (45-74)."),
-    cool: Optional[int] = typer.Option(None, help="Cooling setpoint (64-99)."),
-    temp: bool = typer.Option(False, "--temp", help="Enable 'temporary setpoint' mode."),
+    zones: list[int] = typer.Argument(
+        ..., help="One or more zone numbers (e.g., 1 3)."
+    ),
+    heat: int | None = typer.Option(None, help="Heating setpoint (45-74)."),
+    cool: int | None = typer.Option(None, help="Cooling setpoint (64-99)."),
+    temp: bool = typer.Option(
+        False, "--temp", help="Enable 'temporary setpoint' mode."
+    ),
     hold: bool = typer.Option(False, "--hold", help="Enable 'hold' mode."),
     out: bool = typer.Option(False, "--out", help="Enable 'out' mode."),
 ):

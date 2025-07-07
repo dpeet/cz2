@@ -1,5 +1,4 @@
 # src/pycz2/core/models.py
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -28,22 +27,23 @@ class SystemStatus(BaseModel):
     outside_temp: int
     air_handler_temp: int
     zone1_humidity: int
-    zones: List[ZoneStatus]
+    zones: list[ZoneStatus]
 
 
 # --- API Argument Models ---
 
+
 class ZoneTemperatureArgs(BaseModel):
-    heat: Optional[int] = Field(None, ge=45, le=74)
-    cool: Optional[int] = Field(None, ge=64, le=99)
-    temp: Optional[bool] = False
-    hold: Optional[bool] = False
-    out: Optional[bool] = False
+    heat: int | None = Field(None, ge=45, le=74)
+    cool: int | None = Field(None, ge=64, le=99)
+    temp: bool | None = False
+    hold: bool | None = False
+    out: bool | None = False
 
 
 class SystemModeArgs(BaseModel):
     mode: SystemMode
-    all: Optional[bool] = None
+    all: bool | None = None
 
 
 class SystemFanArgs(BaseModel):
@@ -51,5 +51,5 @@ class SystemFanArgs(BaseModel):
 
 
 class ZoneHoldArgs(BaseModel):
-    hold: Optional[bool] = None
-    temp: Optional[bool] = None
+    hold: bool | None = None
+    temp: bool | None = None

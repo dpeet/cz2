@@ -19,10 +19,16 @@ def api_server():
     """
     Runs the FastAPI web server and MQTT background task.
     """
-    print(f"Starting pycz2 API server on http://{settings.API_HOST}:{settings.API_PORT}")
+    print(
+        f"Starting pycz2 API server on http://{settings.API_HOST}:{settings.API_PORT}"
+    )
     print("Interactive API docs available at http://localhost:8000/docs")
     if settings.MQTT_ENABLED:
-        print(f"MQTT publisher enabled. Publishing to '{settings.MQTT_TOPIC_PREFIX}/status' every {settings.MQTT_PUBLISH_INTERVAL}s.")
+        print(
+            f"MQTT publisher enabled. Publishing to "
+            f"'{settings.MQTT_TOPIC_PREFIX}/status' "
+            f"every {settings.MQTT_PUBLISH_INTERVAL}s."
+        )
     else:
         print("MQTT publisher is disabled.")
 
@@ -30,8 +36,9 @@ def api_server():
         "pycz2.api:app",
         host=settings.API_HOST,
         port=settings.API_PORT,
-        reload=False, # Set to True for development
+        reload=False,  # Set to True for development
     )
+
 
 # For convenience, alias 'api' to 'api_server'
 app.command("api")(api_server)

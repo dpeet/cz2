@@ -4,7 +4,6 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from functools import lru_cache
-from typing import List, Optional
 
 import pyserial_asyncio
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -32,8 +31,8 @@ class ComfortZoneIIClient:
         self.connect_str = connect_str
         self.zone_count = zone_count
         self.device_id = device_id
-        self.reader: Optional[asyncio.StreamReader] = None
-        self.writer: Optional[asyncio.StreamWriter] = None
+        self.reader: asyncio.StreamReader | None = None
+        self.writer: asyncio.StreamWriter | None = None
         self._buffer = b""
         self._is_serial = ":" not in self.connect_str
 
@@ -43,12 +42,21 @@ class ComfortZoneIIClient:
         log.info(f"Connecting to {self.connect_str}...")
         try:
             if self._is_serial:
-                self.reader, self.writer = await pyserial_asyncio.open_serial_connection(
-                    url=self.connect_str, baudrate=9600, bytesize=8, parity="N", stopbits=1
+                (
+                    self.reader,
+                    self.writer,
+                ) = await pyserial_asyncio.open_serial_connection(
+                    url=self.connect_str,
+                    baudrate=9600,
+                    bytesize=8,
+                    parity="N",
+                    stopbits=1,
                 )
             else:
                 host, port = self.connect_str.split(":")
-                self.reader, self.writer = await asyncio.open_connection(host, int(port))
+                self.reader, self.writer = await asyncio.open_connection(
+                    host, int(port)
+                )
             log.info("Connection successful.")
         except Exception as e:
             log.error(f"Failed to connect to {self.connect_str}: {e}")
@@ -74,6 +82,7 @@ class ComfortZoneIIClient:
             await self.close()
 
     __aenter__ = connection
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
@@ -116,14 +125,14 @@ class ComfortZoneIIClient:
             # No valid frame found, read more data
             self._buffer += await self._read_data(MAX_MESSAGE_SIZE)
 
-    async def monitor_bus(self) -> AsyncGenerator[CZFrame, None]:
+    async def monitor_bus(self) -> AsyncGenerator[CZFrame]:
         """Yields frames as they are seen on the bus."""
         while True:
             yield await self.get_frame()
 
     @retry(stop=stop_after_attempt(5), wait=wait_fixed(2))
     async def send_with_reply(
-        self, destination: int, function: Function, data: List[int]
+        self, destination: int, function: Function, data: list[int]
     ) -> CZFrame:
         message = build_message(
             destination=destination,
@@ -141,20 +150,24 @@ class ComfortZoneIIClient:
                 raise OSError(f"Error reply received: {reply.data}")
             if reply.function == Function.reply:
                 # Basic validation for read replies
-                if function == Function.read and len(data) >= 3 and len(reply.data) >= 3:
+                if (
+                    function == Function.read
+                    and len(data) >= 3
+                    and len(reply.data) >= 3
+                ):
                     if reply.data[0:3] == data[0:3]:
                         return reply
-                else: # For writes, any reply is good
+                else:  # For writes, any reply is good
                     return reply
 
-        raise asyncio.TimeoutError("No valid reply received.")
+        raise TimeoutError("No valid reply received.")
 
     async def read_row(self, dest: int, table: int, row: int) -> CZFrame:
         return await self.send_with_reply(
             destination=dest, function=Function.read, data=[0, table, row]
         )
 
-    async def write_row(self, dest: int, table: int, row: int, data: List[int]):
+    async def write_row(self, dest: int, table: int, row: int, data: list[int]):
         full_data = [0, table, row] + data
         reply = await self.send_with_reply(
             destination=dest, function=Function.write, data=full_data
@@ -188,7 +201,9 @@ class ComfortZoneIIClient:
             display_hour = 12
         elif hour > 12:
             display_hour = hour - 12
-        system_time = f"{WEEKDAY_MAP.get(day, 'Unk')} {display_hour:02d}:{minute:02d}{ampm}"
+        system_time = (
+            f"{WEEKDAY_MAP.get(day, 'Unk')} {display_hour:02d}:{minute:02d}{ampm}"
+        )
 
         # Modes and states
         s_mode = data["1.12"][4]
@@ -199,7 +214,7 @@ class ComfortZoneIIClient:
         aux_heat_on = bool(data["9.5"][3] & 0x0C)
 
         active_state = "Cool Off"
-        if e_mode in (SYSTEM_MODE_MAP.get(0), SYSTEM_MODE_MAP.get(3)): # Heat or EHeat
+        if e_mode in (SYSTEM_MODE_MAP.get(0), SYSTEM_MODE_MAP.get(3)):  # Heat or EHeat
             active_state = "Heat Off"
         if compressor_on:
             active_state = "Cool On"
@@ -207,7 +222,6 @@ class ComfortZoneIIClient:
                 active_state = "Heat On"
         if aux_heat_on:
             active_state += " [AUX]"
-
 
         status = SystemStatus(
             system_time=system_time,
@@ -242,17 +256,20 @@ class ComfortZoneIIClient:
 
         return status
 
-    async def set_system_mode(self, mode: Optional[SystemMode], all_zones_mode: Optional[bool]):
-        if mode is None and all_zones_mode is None: return
+    async def set_system_mode(
+        self, mode: SystemMode | None, all_zones_mode: bool | None
+    ):
+        if mode is None and all_zones_mode is None:
+            return
 
         frame = await self.read_row(1, 1, 12)
-        data = frame.data[3:] # Get writable part of the row
+        data = frame.data[3:]  # Get writable part of the row
 
         if mode is not None:
             mode_val = next(k for k, v in SYSTEM_MODE_MAP.items() if v == mode)
-            data[4-3] = mode_val # byte 4 is mode
+            data[4 - 3] = mode_val  # byte 4 is mode
         if all_zones_mode is not None:
-            data[15-3] = 1 if all_zones_mode else 0 # byte 15 is all_mode
+            data[15 - 3] = 1 if all_zones_mode else 0  # byte 15 is all_mode
 
         await self.write_row(1, 1, 12, data)
 
@@ -263,20 +280,20 @@ class ComfortZoneIIClient:
         fan_val = next(k for k, v in FAN_MODE_MAP.items() if v == fan_mode)
 
         # Fan mode is bit 2 of byte 3
-        current_val = data[3-3]
+        current_val = data[3 - 3]
         mask = ~(1 << 2)
-        data[3-3] = (current_val & mask) | (fan_val << 2)
+        data[3 - 3] = (current_val & mask) | (fan_val << 2)
 
         await self.write_row(1, 1, 17, data)
 
     async def set_zone_setpoints(
         self,
-        zones: List[int],
-        heat_setpoint: Optional[int] = None,
-        cool_setpoint: Optional[int] = None,
-        temporary_hold: Optional[bool] = None,
-        hold: Optional[bool] = None,
-        out_mode: Optional[bool] = None,
+        zones: list[int],
+        heat_setpoint: int | None = None,
+        cool_setpoint: int | None = None,
+        temporary_hold: bool | None = None,
+        hold: bool | None = None,
+        out_mode: bool | None = None,
     ):
         # Read existing data rows first to modify them
         row12_frame = await self.read_row(1, 1, 12)
@@ -285,12 +302,15 @@ class ComfortZoneIIClient:
         data16 = row16_frame.data[3:]
 
         for zone_id in zones:
-            if not (1 <= zone_id <= self.zone_count): continue
+            if not (1 <= zone_id <= self.zone_count):
+                continue
             z_idx = zone_id - 1
             bit = 1 << z_idx
 
-            if heat_setpoint is not None: data16[11 + z_idx - 3] = heat_setpoint
-            if cool_setpoint is not None: data16[3 + z_idx - 3] = cool_setpoint
+            if heat_setpoint is not None:
+                data16[11 + z_idx - 3] = heat_setpoint
+            if cool_setpoint is not None:
+                data16[3 + z_idx - 3] = cool_setpoint
 
             if temporary_hold is not None:
                 data12[9 - 3] = (data12[9 - 3] & ~bit) | (int(temporary_hold) << z_idx)
@@ -307,11 +327,13 @@ class ComfortZoneIIClient:
 def get_client() -> ComfortZoneIIClient:
     """Cached factory for the client."""
     from ..config import settings
+
     return ComfortZoneIIClient(
         connect_str=settings.CZ_CONNECT,
         zone_count=settings.CZ_ZONES,
         device_id=settings.CZ_ID,
     )
+
 
 @lru_cache
 def get_lock() -> asyncio.Lock:

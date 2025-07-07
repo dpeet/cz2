@@ -23,7 +23,9 @@ class MqttClient:
     async def connect(self):
         try:
             await self._client.connect()
-            log.info(f"Connected to MQTT broker at {settings.MQTT_HOST}:{settings.MQTT_PORT}")
+            log.info(
+                f"Connected to MQTT broker at {settings.MQTT_HOST}:{settings.MQTT_PORT}"
+            )
         except Exception as e:
             log.error(f"Failed to connect to MQTT broker: {e}")
             # Depending on requirements, you might want to retry or exit

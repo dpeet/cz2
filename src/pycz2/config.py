@@ -1,6 +1,5 @@
 # src/pycz2/config.py
 import logging.config
-from typing import List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,7 +13,7 @@ class Settings(BaseSettings):
     # Connection Settings
     CZ_CONNECT: str = "localhost:8899"
     CZ_ZONES: int = Field(default=1, ge=1, le=8)
-    CZ_ZONE_NAMES: Optional[List[str]] = None
+    CZ_ZONE_NAMES: list[str] | None = None
     CZ_ID: int = Field(default=99, ge=1, le=255)
 
     # API Server Settings
@@ -25,8 +24,8 @@ class Settings(BaseSettings):
     MQTT_ENABLED: bool = False
     MQTT_HOST: str = "localhost"
     MQTT_PORT: int = 1883
-    MQTT_USER: Optional[str] = None
-    MQTT_PASSWORD: Optional[str] = None
+    MQTT_USER: str | None = None
+    MQTT_PASSWORD: str | None = None
     MQTT_TOPIC_PREFIX: str = "hvac/cz2"
     MQTT_PUBLISH_INTERVAL: int = Field(default=60, ge=5)
 
@@ -43,7 +42,8 @@ class Settings(BaseSettings):
         if v is not None and "CZ_ZONES" in info.data:
             if len(v) != info.data["CZ_ZONES"]:
                 raise ValueError(
-                    f"Number of zone names ({len(v)}) must match CZ_ZONES ({info.data['CZ_ZONES']})."
+                    f"Number of zone names ({len(v)}) must match CZ_ZONES "
+                    f"({info.data['CZ_ZONES']})."
                 )
         return v
 
@@ -71,7 +71,11 @@ LOGGING_CONFIG = {
     "loggers": {
         "pycz2": {"handlers": ["default"], "level": "INFO"},
         "uvicorn.error": {"level": "INFO"},
-        "uvicorn.access": {"handlers": ["default"], "level": "INFO", "propagate": False},
+        "uvicorn.access": {
+            "handlers": ["default"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
 
