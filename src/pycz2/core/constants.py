@@ -60,3 +60,7 @@ READ_QUERIES = [
     "1.18",
     "1.24",  # Master controller data
 ]
+
+# Damper position calculation divisor
+DAMPER_DIVISOR = 15.0
+assert DAMPER_DIVISOR > 0, "Damper divisor must be positive"

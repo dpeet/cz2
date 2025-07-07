@@ -6,9 +6,11 @@ from contextlib import asynccontextmanager
 from functools import lru_cache
 
 import pyserial_asyncio
+from construct import ConstError, StreamError
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .constants import (
+    DAMPER_DIVISOR,
     EFFECTIVE_MODE_MAP,
     FAN_MODE_MAP,
     MAX_MESSAGE_SIZE,
@@ -53,9 +55,35 @@ class ComfortZoneIIClient:
                     stopbits=1,
                 )
             else:
-                host, port = self.connect_str.split(":")
+                # Validate connection string format
+                if ":" not in self.connect_str:
+                    raise ValueError(
+                        f"Invalid connection string format: {self.connect_str}. "
+                        "Expected 'host:port'"
+                    )
+                
+                parts = self.connect_str.split(":", 1)  # Split only on first colon
+                if len(parts) != 2:
+                    raise ValueError(
+                        f"Invalid connection string format: {self.connect_str}. "
+                        "Expected 'host:port'"
+                    )
+                
+                host, port_str = parts
+                if not host:
+                    raise ValueError("Host cannot be empty")
+                try:
+                    port = int(port_str)
+                    if not 1 <= port <= 65535:
+                        raise ValueError(
+                            f"Port {port} is out of valid range (1-65535)"
+                        )
+                except ValueError as e:
+                    raise ValueError(
+                        f"Invalid port in connection string: {port_str}"
+                    ) from e
                 self.reader, self.writer = await asyncio.open_connection(
-                    host, int(port)
+                    host, port
                 )
             log.info("Connection successful.")
         except Exception as e:
@@ -106,11 +134,26 @@ class ComfortZoneIIClient:
         await self.writer.drain()
 
     async def get_frame(self) -> CZFrame:
+        # Prevent memory exhaustion
+        max_buffer_size = 10 * MAX_MESSAGE_SIZE
+        consecutive_failures = 0
+        max_failures = 50
         while True:
             if len(self._buffer) < MIN_MESSAGE_SIZE:
-                self._buffer += await self._read_data(MAX_MESSAGE_SIZE)
+                data = await self._read_data(MAX_MESSAGE_SIZE)
+                if not data:
+                    consecutive_failures += 1
+                    if consecutive_failures > max_failures:
+                        raise ConnectionAbortedError("Too many consecutive empty reads")
+                else:
+                    consecutive_failures = 0
+                self._buffer += data
                 continue
 
+            if len(self._buffer) > max_buffer_size:
+                # Clear old buffer data to prevent memory leak
+                self._buffer = self._buffer[-MAX_MESSAGE_SIZE:]
+                log.warning("Buffer overflow, clearing old data")
             for offset in range(len(self._buffer) - MIN_MESSAGE_SIZE + 1):
                 try:
                     test_frame = FRAME_TESTER.parse(self._buffer[offset:])
@@ -118,12 +161,26 @@ class ComfortZoneIIClient:
                         frame_bytes = test_frame.frame
                         frame = FRAME_PARSER.parse(frame_bytes)
                         self._buffer = self._buffer[offset + len(frame_bytes) :]
+                        # Reset on successful frame
+                        consecutive_failures = 0
                         return frame
-                except Exception:
-                    continue  # Ignore parsing errors and keep scanning
+                except (StreamError, ConstError):
+                    # Specific construct parsing errors - continue scanning
+                    continue
+                except Exception as e:
+                    # Unexpected error - log but continue
+                    log.debug(f"Unexpected error parsing frame at offset {offset}: {e}")
+                    continue
 
             # No valid frame found, read more data
-            self._buffer += await self._read_data(MAX_MESSAGE_SIZE)
+            data = await self._read_data(MAX_MESSAGE_SIZE)
+            if not data:
+                consecutive_failures += 1
+                if consecutive_failures > max_failures:
+                    raise ConnectionAbortedError("Too many consecutive empty reads")
+            else:
+                consecutive_failures = 0
+            self._buffer += data
 
     async def monitor_bus(self) -> AsyncGenerator[CZFrame]:
         """Yields frames as they are seen on the bus."""
@@ -191,10 +248,20 @@ class ComfortZoneIIClient:
             # Standard 16-bit two's complement, then divide by 16
             temp = (val - 65536) if val & 0x8000 else val
             return round(temp / 16.0)
+        # Helper to safely get array element with bounds checking
+        def safe_get(arr: list[int], index: int, default: int = 0) -> int:
+            if 0 <= index < len(arr):
+                return arr[index]
+            log.warning(f"Index {index} out of bounds for array of length {len(arr)}")
+            return default
 
         # System time
-        t_data = data["1.18"]
-        day, hour, minute = t_data[3], t_data[4], t_data[5]
+        t_data = data.get("1.18", [])
+        if len(t_data) < 6:
+            log.error(f"Invalid time data length: {len(t_data)}, expected at least 6")
+            day, hour, minute = 0, 0, 0
+        else:
+            day, hour, minute = t_data[3], t_data[4], t_data[5]
         ampm = "pm" if hour >= 12 else "am"
         display_hour = hour
         if hour == 0:
@@ -206,12 +273,15 @@ class ComfortZoneIIClient:
         )
 
         # Modes and states
-        s_mode = data["1.12"][4]
-        e_mode = data["1.12"][6]
-        fan_mode_raw = (data["1.17"][3] & 0x04) >> 2
-        fan_on = bool(data["9.5"][3] & 0x20)
-        compressor_on = bool(data["9.5"][3] & 0x03)
-        aux_heat_on = bool(data["9.5"][3] & 0x0C)
+        data_1_12 = data.get("1.12", [])
+        data_1_17 = data.get("1.17", [])
+        data_9_5 = data.get("9.5", [])
+        s_mode = safe_get(data_1_12, 4)
+        e_mode = safe_get(data_1_12, 6)
+        fan_mode_raw = (safe_get(data_1_17, 3) & 0x04) >> 2
+        fan_on = bool(safe_get(data_9_5, 3) & 0x20)
+        compressor_on = bool(safe_get(data_9_5, 3) & 0x03)
+        aux_heat_on = bool(safe_get(data_9_5, 3) & 0x0C)
 
         effective_mode_val = EFFECTIVE_MODE_MAP.get(e_mode, SystemMode.OFF)
         active_state = "Cool Off"
@@ -224,6 +294,8 @@ class ComfortZoneIIClient:
         if aux_heat_on:
             active_state += " [AUX]"
 
+        data_9_3 = data.get("9.3", [])
+        data_1_9 = data.get("1.9", [])
         status = SystemStatus(
             system_time=system_time,
             system_mode=SYSTEM_MODE_MAP.get(s_mode, SystemMode.OFF),
@@ -231,27 +303,31 @@ class ComfortZoneIIClient:
             fan_mode=FAN_MODE_MAP.get(fan_mode_raw, FanMode.AUTO),
             fan_state="On" if fan_on else "Off",
             active_state=active_state,
-            all_mode=bool(data["1.12"][15]),
-            outside_temp=decode_temp(data["9.3"][4], data["9.3"][5]),
-            air_handler_temp=data["9.3"][6],
-            zone1_humidity=data["1.9"][4],
+            all_mode=bool(safe_get(data_1_12, 15)),
+            outside_temp=decode_temp(safe_get(data_9_3, 4), safe_get(data_9_3, 5)),
+            air_handler_temp=safe_get(data_9_3, 6),
+            zone1_humidity=safe_get(data_1_9, 4),
             zones=[],
         )
 
         # Zone data
+        data_9_4 = data.get("9.4", [])
+        data_1_16 = data.get("1.16", [])
+        data_1_24 = data.get("1.24", [])
         for i in range(self.zone_count):
             zone_id = i + 1
             bit = 1 << i
-            damper_raw = data["9.4"][i + 3]
+            damper_raw = safe_get(data_9_4, i + 3)
             zone = ZoneStatus(
                 zone_id=zone_id,
-                damper_position=round(damper_raw / 15.0 * 100) if damper_raw > 0 else 0,
-                cool_setpoint=data["1.16"][i + 3],
-                heat_setpoint=data["1.16"][i + 11],
-                temperature=data["1.24"][i + 3],
-                temporary=bool(data["1.12"][9] & bit),
-                hold=bool(data["1.12"][10] & bit),
-                out=bool(data["1.12"][12] & bit),
+                damper_position=(round(damper_raw / DAMPER_DIVISOR * 100)
+                                if damper_raw > 0 and DAMPER_DIVISOR > 0 else 0),
+                cool_setpoint=safe_get(data_1_16, i + 3),
+                heat_setpoint=safe_get(data_1_16, i + 11),
+                temperature=safe_get(data_1_24, i + 3),
+                temporary=bool(safe_get(data_1_12, 9) & bit),
+                hold=bool(safe_get(data_1_12, 10) & bit),
+                out=bool(safe_get(data_1_12, 12) & bit),
             )
             status.zones.append(zone)
 
@@ -267,7 +343,9 @@ class ComfortZoneIIClient:
         data = frame.data[3:]  # Get writable part of the row
 
         if mode is not None:
-            mode_val = next(k for k, v in SYSTEM_MODE_MAP.items() if v == mode)
+            mode_val = next((k for k, v in SYSTEM_MODE_MAP.items() if v == mode), None)
+            if mode_val is None:
+                raise ValueError(f"Invalid system mode: {mode}")
             data[4 - 3] = mode_val  # byte 4 is mode
         if all_zones_mode is not None:
             data[15 - 3] = 1 if all_zones_mode else 0  # byte 15 is all_mode
@@ -278,7 +356,9 @@ class ComfortZoneIIClient:
         frame = await self.read_row(1, 1, 17)
         data = frame.data[3:]
 
-        fan_val = next(k for k, v in FAN_MODE_MAP.items() if v == fan_mode)
+        fan_val = next((k for k, v in FAN_MODE_MAP.items() if v == fan_mode), None)
+        if fan_val is None:
+            raise ValueError(f"Invalid fan mode: {fan_mode}")
 
         # Fan mode is bit 2 of byte 3
         current_val = data[3 - 3]
