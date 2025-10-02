@@ -29,6 +29,30 @@ class Settings(BaseSettings):
     MQTT_TOPIC_PREFIX: str = "hvac/cz2"
     MQTT_PUBLISH_INTERVAL: int = Field(default=60, ge=5)
 
+    # Cache Settings
+    ENABLE_CACHE: bool = True
+    CACHE_STALE_SECONDS: int = Field(default=300, ge=10)
+    CACHE_DB_PATH: str | None = None  # Defaults to ~/.pycz2_cache.db
+
+    # Service Settings (CLI-style refresh)
+    CACHE_REFRESH_INTERVAL: int = Field(default=300, ge=30)  # Background refresh interval in seconds
+    CACHE_MAX_AGE: int = Field(default=600, ge=60)  # Maximum cache age before forced refresh
+
+    # Worker Settings (being phased out)
+    WORKER_ENABLED: bool = False  # Disabled by default - using CLI-style service instead
+    WORKER_POLL_INTERVAL: int = Field(default=30, ge=5)
+    WORKER_RECONNECT_DELAY: int = Field(default=5, ge=1)
+    WORKER_MAX_RECONNECT_DELAY: int = Field(default=300, ge=60)  # 5 minutes
+
+    # SSE Settings
+    ENABLE_SSE: bool = True
+    SSE_HEARTBEAT_INTERVAL: int = Field(default=30, ge=10)
+    SSE_MAX_SUBSCRIBERS_PER_IP: int = Field(default=5, ge=1)
+
+    # Command Queue Settings
+    COMMAND_QUEUE_MAX_SIZE: int = Field(default=100, ge=10)
+    COMMAND_TIMEOUT_SECONDS: int = Field(default=30, ge=5)
+
     @field_validator("CZ_ZONE_NAMES", mode="before")
     @classmethod
     def split_zone_names(cls, v: str | list[str] | None) -> list[str] | None:

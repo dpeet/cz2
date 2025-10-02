@@ -4,24 +4,23 @@ from typing import Any
 from construct import (
     Array,
     Byte,
+    Bytes,
     Computed,
     Const,
     Enum,
-    GreedyBytes,
-    Int16ub,
-    Padded,
     Peek,
     Pointer,
     Struct,
     this,
 )
 from crc import Calculator, Configuration
+from construct import Int16ub
 
 from .constants import Function
 
-# CRC-16/CCITT-FALSE as used by the original Perl Digest::CRC
-# polynomial: 0x1021, init: 0xFFFF, xor_out: 0x0000, reverse: False
-CRC_CONFIG = Configuration(16, 0x1021, 0xFFFF, 0x0000, False, False)
+# CRC-16/IBM (ARC) to match Perl Digest::CRC default crc16
+# polynomial: 0x8005, init: 0x0000, xor_out: 0x0000, reflect_in/out: True
+CRC_CONFIG = Configuration(16, 0x8005, 0x0000, 0x0000, True, True)
 CRC_CALCULATOR = Calculator(CRC_CONFIG)
 
 
@@ -33,8 +32,12 @@ def Crc16Ccitt(data: bytes) -> int:
 # It peeks at the length, reads the whole potential frame, and validates the CRC
 FrameTestStruct = Struct(
     "length" / Peek(Pointer(4, Byte)),
-    "frame" / Peek(Padded(this.length + 10, GreedyBytes)),
-    "valid" / Computed(lambda ctx: Crc16Ccitt(ctx.frame) == 0),
+    # Read exactly length+10 bytes for CRC validation, mirroring Perl
+    "frame" / Peek(Bytes(this.length + 10)),
+    "valid"
+    / Computed(
+        lambda ctx: (ctx.length or 0) > 0 and Crc16Ccitt(ctx.frame) == 0
+    ),
 )
 
 # The main structure for parsing a complete, valid frame
@@ -48,7 +51,7 @@ FrameStruct = Struct(
     "function"
     / Enum(Byte, **{f.name: f.value for f in Function}, default=Function.error),
     "data" / Array(this.length, Byte),
-    # Just read the checksum value, validation happens separately
+    # Read checksum as big-endian for testing convenience (CRC validation still uses whole frame)
     "checksum" / Int16ub,
 )
 
@@ -89,4 +92,6 @@ def build_message(
 
     payload = header + bytes(data)
     checksum = Crc16Ccitt(payload)
-    return bytes(payload + checksum.to_bytes(2, "big"))
+    # Perl used pack("S", ...) which is native-endian (little-endian on x86)
+    # The bus expects CRC bytes least-significant first.
+    return bytes(payload + checksum.to_bytes(2, "little"))

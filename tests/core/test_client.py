@@ -55,15 +55,15 @@ class TestComfortZoneIIClient:
         
         # Mock data for each query in READ_QUERIES
         queries_data = {
-            "9.3": [0, 9, 3, 0, 0, 0, 0, 65, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Outside temp data
-            "9.4": [0, 9, 4, 15, 12, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Damper positions
-            "9.5": [0, 9, 5, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Panel status
-            "1.9": [0, 1, 9, 0, 45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Zone 1 humidity
-            "1.12": [0, 1, 12, 0, 2, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # System mode
-            "1.16": [0, 1, 16, 0, 0, 0, 74, 74, 74, 74, 0, 68, 68, 68, 68, 0, 0, 0, 0],  # Setpoints
-            "1.17": [0, 1, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Fan mode
-            "1.18": [0, 1, 18, 0, 0, 0, 2, 14, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Time
-            "1.24": [0, 1, 24, 0, 0, 0, 72, 70, 68, 66, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Zone temps
+            "9.9.3": [0, 9, 3, 0, 0, 0, 0, 65, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Outside temp data
+            "9.9.4": [0, 9, 4, 15, 12, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Damper positions
+            "9.9.5": [0, 9, 5, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Panel status (fan on)
+            "1.1.9": [0, 1, 9, 0, 45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Zone 1 humidity
+            "1.1.12": [0, 1, 12, 0, 2, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # System mode
+            "1.1.16": [0, 1, 16, 74, 74, 74, 74, 0, 0, 0, 0, 68, 68, 68, 68, 0, 0, 0, 0],  # Setpoints
+            "1.1.17": [0, 1, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Fan mode
+            "1.1.18": [0, 1, 18, 2, 14, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Time
+            "1.1.24": [0, 1, 24, 72, 70, 68, 66, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Zone temps
         }
         
         for query, data in queries_data.items():
@@ -127,7 +127,7 @@ class TestComfortZoneIIClient:
         
         # Configure mock reader to return frames in sequence
         frame_sequence = []
-        for query in ["9.3", "9.4", "9.5", "1.9", "1.12", "1.16", "1.17", "1.18", "1.24"]:
+        for query in ["9.9.3", "9.9.4", "9.9.5", "1.1.9", "1.1.12", "1.1.16", "1.1.17", "1.1.18", "1.1.24"]:
             frame_sequence.append(mock_frames[query])
         
         mock_reader.read.side_effect = frame_sequence
@@ -147,6 +147,15 @@ class TestComfortZoneIIClient:
         assert result.all_mode is False
         assert result.outside_temp == 65  # From mock data
         assert result.zone1_humidity == 45
+        assert result.fan_state == "On"
+        assert result.compressor_stage_1 is False
+        assert result.compressor_stage_2 is False
+        assert result.aux_heat_stage_1 is False
+        assert result.aux_heat_stage_2 is False
+        assert result.humidify is False
+        assert result.dehumidify is False
+        assert result.reversing_valve is False
+        assert result.raw is None
         assert len(result.zones) == 4
         
         # Verify zone data
@@ -156,6 +165,33 @@ class TestComfortZoneIIClient:
         assert zone.heat_setpoint == 68
         assert zone.temperature == 72
         assert zone.damper_position == 100  # 15/15 * 100
+
+    @pytest.mark.asyncio
+    async def test_get_status_data_with_raw(self, client, mock_reader, mock_writer):
+        """Ensure include_raw=True returns base64 blob."""
+        mock_frames = self.create_status_mock_data()
+        frame_sequence = []
+        for query in [
+            "9.9.3",
+            "9.9.4",
+            "9.9.5",
+            "1.1.9",
+            "1.1.12",
+            "1.1.16",
+            "1.1.17",
+            "1.1.18",
+            "1.1.24",
+        ]:
+            frame_sequence.append(mock_frames[query])
+
+        mock_reader.read.side_effect = frame_sequence
+        client.reader = mock_reader
+        client.writer = mock_writer
+
+        result = await client.get_status_data(include_raw=True)
+
+        assert isinstance(result.raw, str)
+        assert len(result.raw) > 0
 
     @pytest.mark.asyncio
     async def test_set_zone_setpoints(self, client, mock_reader, mock_writer):

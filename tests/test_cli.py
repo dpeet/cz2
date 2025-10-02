@@ -87,6 +87,14 @@ class TestCLIIntegration:
             outside_temp=85,
             air_handler_temp=65,
             zone1_humidity=45,
+            compressor_stage_1=False,
+            compressor_stage_2=False,
+            aux_heat_stage_1=False,
+            aux_heat_stage_2=False,
+            humidify=False,
+            dehumidify=False,
+            reversing_valve=False,
+            raw=None,
             zones=zones
         )
 
@@ -178,9 +186,26 @@ class TestCLIIntegration:
         assert '"system_mode": "Auto"' in result.stdout
         assert '"outside_temp": 85' in result.stdout
         assert '"zones":' in result.stdout
-        
+        assert '"raw"' not in result.stdout
+
         # Verify mock was called
-        mock_client.get_status_data.assert_called_once()
+        mock_client.get_status_data.assert_called_once_with(include_raw=False)
+
+    def test_status_json_command_with_raw(self, runner, mock_client, sample_status, monkeypatch):
+        """status-json should include raw blob when requested."""
+        raw_blob = "QUJD"
+        mock_client.get_status_data.return_value = sample_status.model_copy(update={"raw": raw_blob})
+
+        async def mock_get_client():
+            return mock_client
+
+        monkeypatch.setattr(cli, "get_client", mock_get_client)
+
+        result = runner.invoke(cli.app, ["status-json", "--raw"])
+
+        assert result.exit_code == 0
+        assert f'"raw": "{raw_blob}"' in result.stdout
+        mock_client.get_status_data.assert_called_once_with(include_raw=True)
 
     def test_set_system_command_success(self, runner, mock_client, sample_status, monkeypatch):
         """Test successful set-system command execution."""

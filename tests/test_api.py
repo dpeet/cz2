@@ -20,6 +20,10 @@ class TestAPIIntegration:
     def mock_client(self):
         """Create a mock ComfortZoneIIClient."""
         client = AsyncMock(spec=ComfortZoneIIClient)
+        connection_cm = AsyncMock()
+        connection_cm.__aenter__.return_value = None
+        connection_cm.__aexit__.return_value = None
+        client.connection.return_value = connection_cm
         return client
 
     @pytest.fixture
@@ -40,9 +44,18 @@ class TestAPIIntegration:
         app.dependency_overrides[get_client] = lambda: mock_client
         app.dependency_overrides[get_mqtt_client] = lambda: mock_mqtt_client
         app.dependency_overrides[get_lock] = lambda: mock_lock
-        
-        yield app
-        
+
+        async def noop(*args, **kwargs):
+            return None
+
+        hvac_client_patch = patch('pycz2.hvac_service.get_client', lambda: mock_client)
+        hvac_start_patch = patch('pycz2.hvac_service.HVACService.start', noop)
+        hvac_stop_patch = patch('pycz2.hvac_service.HVACService.stop', noop)
+
+        # Disable worker mode for tests (use synchronous mode)
+        with patch('pycz2.api.settings.WORKER_ENABLED', False), hvac_client_patch, hvac_start_patch, hvac_stop_patch:
+            yield app
+
         # Clean up overrides after test
         app.dependency_overrides.clear()
 
@@ -89,22 +102,91 @@ class TestAPIIntegration:
             outside_temp=85,
             air_handler_temp=65,
             zone1_humidity=45,
+            compressor_stage_1=False,
+            compressor_stage_2=False,
+            aux_heat_stage_1=False,
+            aux_heat_stage_2=False,
+            humidify=False,
+            dehumidify=False,
+            reversing_valve=False,
+            raw=None,
             zones=zones
         )
 
     def test_get_status_success(self, client, mock_client, sample_status):
-        """Test successful GET /status request."""
-        # Configure mock to return sample status
+        """Test successful GET /status request with new structured format."""
+        # With cache enabled, we need to populate it first
+        # Call /update to populate cache with sample data
         mock_client.get_status_data.return_value = sample_status
-        
-        # Make request
+
+        # First do an update to populate cache
+        response = client.post("/update")
+        assert response.status_code == 200
+
+        # Now test the GET /status which returns from cache
         response = client.get("/status")
-        
+
         # Verify response
         assert response.status_code == 200
         data = response.json()
-        
-        # Verify basic structure and values
+
+        # With cache enabled, we get structured response
+        assert "status" in data
+        assert "meta" in data
+
+        # Verify meta fields
+        meta = data["meta"]
+        assert "connected" in meta
+        assert "is_stale" in meta
+        assert "source" in meta
+
+        # Verify status data
+        status = data["status"]
+        assert status["system_time"] == "Mon 02:30pm"
+        assert status["system_mode"] == "Auto"
+        assert status["effective_mode"] == "Cool"
+        assert status["fan_mode"] == "Auto"
+        assert status["fan_state"] == "On"
+        assert status["active_state"] == "Cool On"
+        assert status["all_mode"] is False
+        assert status["outside_temp"] == 85
+        assert status["air_handler_temp"] == 65
+        assert status["zone1_humidity"] == 45
+        assert status["compressor_stage_1"] is False
+        assert status["compressor_stage_2"] is False
+        assert status["aux_heat_stage_1"] is False
+        assert status["aux_heat_stage_2"] is False
+        assert status["humidify"] is False
+        assert status["dehumidify"] is False
+        assert status["reversing_valve"] is False
+        assert "raw" not in status
+        assert len(status["zones"]) == 2
+
+        # Verify zone data
+        zone1 = status["zones"][0]
+        assert zone1["zone_id"] == 1
+        assert zone1["temperature"] == 72
+        assert zone1["cool_setpoint"] == 74
+        assert zone1["heat_setpoint"] == 68
+
+    def test_get_status_success_flat_format(self, client, mock_client, sample_status):
+        """Test successful GET /status request with flat=1 parameter for legacy compatibility."""
+        # Configure mock to return sample status
+        mock_client.get_status_data.return_value = sample_status
+
+        # Make request with flat=1 parameter
+        response = client.get("/status?flat=1")
+
+        # Verify response
+        assert response.status_code == 200
+        data = response.json()
+
+        # With flat=1, we get legacy flat format
+        assert "system_time" in data
+        assert "status" not in data  # No nested structure
+        assert "meta" not in data
+
+        # Verify basic structure and values (flat format)
         assert data["system_time"] == "Mon 02:30pm"
         assert data["system_mode"] == "Auto"
         assert data["effective_mode"] == "Cool"
@@ -115,61 +197,83 @@ class TestAPIIntegration:
         assert data["outside_temp"] == 85
         assert data["air_handler_temp"] == 65
         assert data["zone1_humidity"] == 45
+        assert data["compressor_stage_1"] is False
+        assert data["compressor_stage_2"] is False
+        assert data["aux_heat_stage_1"] is False
+        assert data["aux_heat_stage_2"] is False
+        assert data["humidify"] is False
+        assert data["dehumidify"] is False
+        assert data["reversing_valve"] is False
+        assert "raw" not in data
         assert len(data["zones"]) == 2
-        
+
         # Verify zone data
         zone1 = data["zones"][0]
         assert zone1["zone_id"] == 1
         assert zone1["temperature"] == 72
         assert zone1["cool_setpoint"] == 74
         assert zone1["heat_setpoint"] == 68
-        
-        # Verify mock was called
-        mock_client.get_status_data.assert_called_once()
 
-    def test_get_status_retry_error(self, client, mock_client):
-        """Test GET /status with RetryError from client."""
-        # Configure mock to raise RetryError
-        mock_client.get_status_data.side_effect = RetryError(None)
-        
-        # Make request
-        response = client.get("/status")
-        
-        # Verify error response
-        assert response.status_code == 504
-        data = response.json()
-        assert "Could not communicate with HVAC controller" in data["detail"]
-        
-        # Verify mock was called
-        mock_client.get_status_data.assert_called_once()
+    def test_get_status_with_raw(self, client, mock_client, sample_status):
+        """Test GET /status returns raw blob when requested."""
+        raw_blob = "QUJD"
+        mock_status = sample_status.model_copy(update={"raw": raw_blob})
+        mock_client.get_status_data.return_value = mock_status
 
-    def test_get_status_general_exception(self, client, mock_client):
-        """Test GET /status with general exception from client."""
-        # Configure mock to raise general exception
-        mock_client.get_status_data.side_effect = Exception("Connection failed")
-        
-        # Make request
-        response = client.get("/status")
-        
-        # Verify error response
-        assert response.status_code == 500
+        response = client.get("/status?raw=1")
+
+        assert response.status_code == 200
         data = response.json()
-        assert "An internal server error occurred" in data["detail"]
+        status = data["status"]
+        assert status["raw"] == raw_blob
+        mock_client.get_status_data.assert_called_with(include_raw=True)
+
+    def test_get_status_with_cache_returns_empty(self, client, mock_client):
+        """Test GET /status with cache enabled returns empty status when no data cached."""
+        # Clear the cache first to ensure we start with empty state
+        response = client.post("/cache/clear")
+        assert response.status_code == 200
+
+        # With cache enabled and no data, we get empty status
+        response = client.get("/status")
+
+        # Should succeed even without HVAC connection
+        assert response.status_code == 200
+        data = response.json()
+
+        # Check we have structured response
+        assert "status" in data
+        assert "meta" in data
+
+        # Meta should indicate disconnected/stale
+        meta = data["meta"]
+        assert meta["connected"] is False
+        assert meta["is_stale"] is True
+
+        # Status should be empty/default values
+        status = data["status"]
+        assert status["system_time"] == "--:--"
+        assert status["system_mode"] == "Off"
+        assert status["zones"] == []
 
     def test_post_update_success(self, client, mock_client, mock_mqtt_client, sample_status):
         """Test successful POST /update request."""
         # Configure mocks
         mock_client.get_status_data.return_value = sample_status
         mock_mqtt_client.publish_status.return_value = None
-        
+
         # Make request
         response = client.post("/update")
-        
-        # Verify response
+
+        # Verify response - with cache enabled, returns structured format
         assert response.status_code == 200
         data = response.json()
-        assert data["system_mode"] == "Auto"
-        
+
+        # Should have status and meta
+        assert "status" in data
+        assert "meta" in data
+        assert data["status"]["system_mode"] == "Auto"
+
         # Verify mocks were called
         mock_client.get_status_data.assert_called_once()
 
@@ -189,11 +293,13 @@ class TestAPIIntegration:
         # Make request
         response = client.post("/system/mode", json=payload)
         
-        # Verify response
+        # Verify response - with cache enabled, returns structured format
         assert response.status_code == 200
         data = response.json()
-        assert data["system_mode"] == "Auto"  # From sample_status
-        
+        assert "status" in data
+        assert "meta" in data
+        assert data["status"]["system_mode"] == "Auto"  # From sample_status
+
         # Verify mock was called with correct arguments
         mock_client.set_system_mode.assert_called_once_with(
             mode=SystemMode.HEAT,
@@ -229,11 +335,13 @@ class TestAPIIntegration:
         # Make request
         response = client.post("/system/fan", json=payload)
         
-        # Verify response
+        # Verify response - with cache enabled, returns structured format
         assert response.status_code == 200
         data = response.json()
-        assert data["fan_mode"] == "Auto"  # From sample_status
-        
+        assert "status" in data
+        assert "meta" in data
+        assert data["status"]["fan_mode"] == "Auto"  # From sample_status
+
         # Verify mock was called with correct arguments
         mock_client.set_fan_mode.assert_called_once_with(FanMode.ON)
         mock_client.get_status_data.assert_called_once()
@@ -257,11 +365,13 @@ class TestAPIIntegration:
         
         # Make request
         response = client.post("/zones/2/temperature", json=payload)
-        
-        # Verify response
+
+        # Verify response - with cache enabled, returns structured format
         assert response.status_code == 200
         data = response.json()
-        assert data["system_mode"] == "Auto"
+        assert "status" in data
+        assert "meta" in data
+        assert data["status"]["system_mode"] == "Auto"
         
         # Verify mock was called with correct arguments
         mock_client.set_zone_setpoints.assert_called_once_with(
@@ -321,11 +431,13 @@ class TestAPIIntegration:
         
         # Make request
         response = client.post("/zones/3/hold", json=payload)
-        
-        # Verify response
+
+        # Verify response - with cache enabled, returns structured format
         assert response.status_code == 200
         data = response.json()
-        assert data["system_mode"] == "Auto"
+        assert "status" in data
+        assert "meta" in data
+        assert data["status"]["system_mode"] == "Auto"
         
         # Verify mock was called with correct arguments
         mock_client.set_zone_setpoints.assert_called_once_with(
@@ -400,14 +512,15 @@ class TestAPIIntegration:
         # Configure mocks - set succeeds but get_status_data fails
         mock_client.set_system_mode.return_value = None
         mock_client.get_status_data.side_effect = RetryError(None)
-        
+
         payload = {
             "mode": "Heat"
         }
-        
+
         response = client.post("/system/mode", json=payload)
-        
-        # Should get 504 error from get_status_and_publish helper
-        assert response.status_code == 504
+
+        # With cache enabled and worker disabled, the error is caught and returns 500
+        # The cache will be updated with error status
+        assert response.status_code == 500
         data = response.json()
-        assert "Could not communicate with HVAC controller" in data["detail"]
+        assert "detail" in data

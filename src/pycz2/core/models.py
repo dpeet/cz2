@@ -27,8 +27,23 @@ class SystemStatus(BaseModel):
     outside_temp: int
     air_handler_temp: int
     zone1_humidity: int
+    compressor_stage_1: bool = False
+    compressor_stage_2: bool = False
+    aux_heat_stage_1: bool = False
+    aux_heat_stage_2: bool = False
+    humidify: bool = False
+    dehumidify: bool = False
+    reversing_valve: bool = False
+    raw: str | None = None
     zones: list[ZoneStatus]
 
+    def to_dict(self, include_raw: bool = False) -> dict:
+        exclude = None if include_raw else {"raw"}
+        return self.model_dump(exclude=exclude, exclude_none=True)
+
+    def to_json(self, include_raw: bool = False, **kwargs) -> str:
+        exclude = None if include_raw else {"raw"}
+        return self.model_dump_json(exclude=exclude, exclude_none=True, **kwargs)
 
 # --- API Argument Models ---
 

@@ -12,12 +12,26 @@ from .core.client import ComfortZoneIIClient
 from .core.constants import FanMode, SystemMode
 from .core.models import SystemStatus
 
+def _version_callback(value: bool):
+    if value:
+        from . import __version__
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
 app = typer.Typer(
     name="cli",
     help="Command-Line Interface for interacting with the HVAC system.",
-    no_args_is_help=True,
+    no_args_is_help=False,
 )
-console = Console()
+console = Console(no_color=True)
+
+@app.callback(invoke_without_command=True)
+def main_callback(ctx: typer.Context):
+    """Handle no-subcommand case: show help and exit 0."""
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
+        raise typer.Exit(0)
 
 
 async def get_client() -> ComfortZoneIIClient:
@@ -37,11 +51,15 @@ def run_async(coro: Coroutine[Any, Any, None]) -> None:
 def print_status(status: SystemStatus) -> None:
     """Prints the status in a human-readable format."""
     console.print(f"[bold]System Time:[/] {status.system_time}")
+    # Display "N/A" for invalid outside temperature (255 = no sensor)
+    outside_display = "N/A" if status.outside_temp == 255 else f"{status.outside_temp}°F"
     console.print(
-        f"[bold]Ambient:[/]\t    Outside {status.outside_temp}°F / Indoor humidity {status.zone1_humidity}%"
+        f"[bold]Ambient:[/]\t    Outside {outside_display} / Indoor humidity {status.zone1_humidity}%"
     )
+    # Display "N/A" for invalid air handler temperature
+    air_handler_display = "N/A" if status.air_handler_temp == 255 else f"{status.air_handler_temp}°F"
     console.print(
-        f"[bold]Air Handler:[/] {status.air_handler_temp}°F, Fan "
+        f"[bold]Air Handler:[/] {air_handler_display}, Fan "
         f"{status.fan_state}, {status.active_state}"
     )
     console.print(
@@ -60,10 +78,11 @@ def print_status(status: SystemStatus) -> None:
     is_auto = status.system_mode == SystemMode.AUTO
 
     for i, zone in enumerate(status.zones):
+        base = f"Zone {zone.zone_id}"
         zone_name = (
-            settings.CZ_ZONE_NAMES[i]
+            f"{base} ({settings.CZ_ZONE_NAMES[i]})"
             if settings.CZ_ZONE_NAMES
-            else f"Zone {zone.zone_id}"
+            else base
         )
         mode_str = ""
         if zone.hold:
@@ -85,9 +104,11 @@ def print_status(status: SystemStatus) -> None:
             else:
                 setpoint_str = f"Cool {zone.cool_setpoint}°"
 
+        # Display "N/A" for invalid zone temperatures (0 = no reading)
+        temp_display = "N/A" if zone.temperature == 0 else str(zone.temperature)
         table.add_row(
             zone_name,
-            str(zone.temperature),
+            temp_display,
             str(zone.damper_position),
             setpoint_str,
             mode_str,
@@ -109,14 +130,20 @@ def status() -> None:
 
 
 @app.command()
-def status_json() -> None:
+def status_json(
+    raw: bool = typer.Option(
+        False,
+        "--raw",
+        help="Include base64-encoded raw frame blob in the JSON output.",
+    )
+) -> None:
     """Print the status information in JSON format."""
 
     async def _status_json() -> None:
         client = await get_client()
         async with client.connection():
-            s = await client.get_status_data()
-            console.print_json(s.model_dump_json(indent=2))
+            s = await client.get_status_data(include_raw=raw)
+            console.print_json(s.to_json(include_raw=raw, indent=2))
 
     run_async(_status_json())
 
@@ -156,8 +183,8 @@ def set_zone(
     zones: list[int] = typer.Argument(
         ..., help="One or more zone numbers (e.g., 1 3)."
     ),
-    heat: int | None = typer.Option(None, help="Heating setpoint (45-74)."),
-    cool: int | None = typer.Option(None, help="Cooling setpoint (64-99)."),
+    heat: int | None = typer.Option(None, help="Heating setpoint (45-74).", min=45, max=74),
+    cool: int | None = typer.Option(None, help="Cooling setpoint (64-99).", min=64, max=99),
     temp: bool = typer.Option(
         False, "--temp", help="Enable 'temporary setpoint' mode."
     ),

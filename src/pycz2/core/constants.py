@@ -50,15 +50,15 @@ WEEKDAY_MAP = {0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "S
 
 # The set of queries needed to build a full status report
 READ_QUERIES = [
-    "9.3",
-    "9.4",
-    "9.5",  # Panel data
-    "1.9",
-    "1.12",
-    "1.16",
-    "1.17",
-    "1.18",
-    "1.24",  # Master controller data
+    "9.9.3",
+    "9.9.4",
+    "9.9.5",  # Panel data
+    "1.1.9",
+    "1.1.12",
+    "1.1.16",
+    "1.1.17",
+    "1.1.18",
+    "1.1.24",  # Master controller data
 ]
 
 # Damper position calculation divisor

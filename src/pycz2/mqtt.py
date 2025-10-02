@@ -2,7 +2,7 @@
 import logging
 from functools import lru_cache
 
-import asyncio_mqtt as mqtt
+import aiomqtt as mqtt
 
 from .config import settings
 from .core.models import SystemStatus
@@ -39,7 +39,7 @@ class MqttClient:
         if not settings.MQTT_ENABLED:
             return
         try:
-            payload = status.model_dump_json()
+            payload = status.to_json()
             await self._client.publish(self.status_topic, payload=payload, qos=1)
             log.info(f"Published status to MQTT topic: {self.status_topic}")
         except Exception as e:
