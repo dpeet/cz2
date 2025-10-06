@@ -1,14 +1,21 @@
-import './App.scss';
+import "./App.scss";
 
-import axios, { all } from 'axios';
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
 import CircleLoader from "react-spinners/CircleLoader";
-import Thermostat from './thermostat';
+import Thermostat from "./thermostat";
+import {
+  systemMode as setSystemModeApi,
+  systemFan as setSystemFanApi,
+  setZoneTemperature,
+  setZoneHold,
+  requestUpdate as requestUpdateApi
+} from "./apiService";
+import { normalizeStatus } from "./apiNormalizer";
 
 export default function System(props) {
     const [CZ2Status, setCZ2Status] = useState(props.status);
-    // const [cz2messages, setCZ2Messages] = useState([]);
+    const [error, setError] = useState(null);
     const [zone1temp, setZone1Temp] = useState(null);
     const [zone1Humidity, setZone1Humidity] = useState(null);
     const [zone1CoolSetPoint, setZone1CoolSetPoint] = useState(null);
@@ -23,51 +30,75 @@ export default function System(props) {
     const [zone3HeatSetPoint, setZone3HeatSetPoint] = useState(null);
     const [zone3Hold, setZone3Hold] = useState(null);
     const [allMode, setAllMode] = useState(null);
-    const [allModeButtonLabel, setAllModeButtonLabel] = useState('');
-    const [zoneSelection, setZoneSelection] = useState('');
-    const [modeSelection, setModeSelection] = useState('');
-    const [targetTemperatureSelection, setTargetTemperatureSelection] = useState('');
+    const [allModeButtonLabel, setAllModeButtonLabel] = useState("");
+    const [zoneSelection, setZoneSelection] = useState("");
+    const [modeSelection, setModeSelection] = useState("");
+    const [targetTemperatureSelection, setTargetTemperatureSelection] = useState("");
     const [isTempChangeLoading, setIsTempChangeLoading] = useState(false);
     const [isSystemModeChangeLoading, setIsSystemModeChangeLoading] = useState(false);
     const [isFanModeChangeLoading, setIsFanModeChangeLoading] = useState(false);
     const [isAllModeChangeLoading, setIsAllModeChangeLoading] = useState(false);
     const [isHoldStatusChangeLoading, setIsHoldStatusChangeLoading] = useState(false);
-    const [allHoldStatusButtonLabel, setAllHoldStatusButtonLabel] = useState('Set Hold On');
-    const [systemMode, setSystemMode] = useState('Unknown');
-    const [systemModeSelection, setSystemModeSelection] = useState('');
-    const [systemFanMode, setSystemFanMode] = useState('Unknown');
-    const [systemFanModeButtonLabel, setSystemFanModeButtonLabel] = useState('');
-    const [lastUpdated, setLastUpdated] = useState('Never');
+    const [allHoldStatusButtonLabel, setAllHoldStatusButtonLabel] = useState("Set Hold On");
+    const [systemMode, setSystemMode] = useState("Unknown");
+    const [systemModeSelection, setSystemModeSelection] = useState("");
+    const [systemFanMode, setSystemFanMode] = useState("Unknown");
+    const [systemFanModeButtonLabel, setSystemFanModeButtonLabel] = useState("");
+    const [lastUpdated, setLastUpdated] = useState("Never");
 
     useEffect(() => { setCZ2Status(props.status) }, [props.status]);
 
     useEffect(() => {
-        console.log(CZ2Status)
-        if(typeof(props.status) !== 'undefined') {
-            setZone1Temp(CZ2Status['zones'][0]['temperature']);
-            setZone1Humidity(CZ2Status['zone1_humidity']);
-            setZone2Temp(CZ2Status['zones'][1]['temperature']);
-            setZone3Temp(CZ2Status['zones'][2]['temperature']);
-            setZone1CoolSetPoint(CZ2Status['zones'][0]['cool_setpoint']);
-            setZone2CoolSetPoint(CZ2Status['zones'][1]['cool_setpoint']);
-            setZone3CoolSetPoint(CZ2Status['zones'][2]['cool_setpoint']);
-            setZone1HeatSetPoint(CZ2Status['zones'][0]['heat_setpoint']);
-            setZone2HeatSetPoint(CZ2Status['zones'][1]['heat_setpoint']);
-            setZone3HeatSetPoint(CZ2Status['zones'][2]['heat_setpoint']);
-            setZone1Hold(CZ2Status['zones'][0]['hold']);
-            setZone2Hold(CZ2Status['zones'][1]['hold']);
-            setZone3Hold(CZ2Status['zones'][2]['hold']);
-            if (CZ2Status['zones'][0]['hold'] >= 1 || CZ2Status['zones'][1]['hold'] >= 1 || CZ2Status['zones'][2]['hold'] >= 1) setAllHoldStatusButtonLabel("Set Hold Off")
-            else if (CZ2Status['zones'][0]['hold'] == 0 && CZ2Status['zones'][1]['hold'] == 0 && CZ2Status['zones'][2]['hold'] == 0) setAllHoldStatusButtonLabel("Set Hold On")
-            setAllMode(CZ2Status['all_mode']);
-            CZ2Status['all_mode'] === 1 ? setZoneSelection("all") : null;
-            if (CZ2Status['all_mode'] >= 1 && CZ2Status['all_mode'] <= 8) setAllModeButtonLabel("Set All Mode Off")
-            else if (CZ2Status['all_mode'] === 0) setAllModeButtonLabel("Set All Mode On")
-            setSystemMode(CZ2Status['system_mode']);
-            setSystemFanMode(CZ2Status['fan_mode']);
-            if (CZ2Status['fan_mode'] === "Auto") setSystemFanModeButtonLabel("Set Always On")
-            else if (CZ2Status['fan_mode'] === "Always On") setSystemFanModeButtonLabel("Set Auto")
-            setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+        if (typeof(props.status) !== "undefined" && props.status) {
+            // Extract status from normalized object (props.status now contains normalized data)
+            const statusData = props.status.status || props.status;
+
+            if (statusData && statusData.zones && statusData.zones.length >= 3) {
+                setZone1Temp(statusData.zones[0].temperature);
+                setZone1Humidity(statusData.zone1_humidity);
+                setZone2Temp(statusData.zones[1].temperature);
+                setZone3Temp(statusData.zones[2].temperature);
+                setZone1CoolSetPoint(statusData.zones[0].cool_setpoint);
+                setZone2CoolSetPoint(statusData.zones[1].cool_setpoint);
+                setZone3CoolSetPoint(statusData.zones[2].cool_setpoint);
+                setZone1HeatSetPoint(statusData.zones[0].heat_setpoint);
+                setZone2HeatSetPoint(statusData.zones[1].heat_setpoint);
+                setZone3HeatSetPoint(statusData.zones[2].heat_setpoint);
+                setZone1Hold(statusData.zones[0].hold);
+                setZone2Hold(statusData.zones[1].hold);
+                setZone3Hold(statusData.zones[2].hold);
+
+                if (statusData.zones[0].hold >= 1 ||
+                    statusData.zones[1].hold >= 1 ||
+                    statusData.zones[2].hold >= 1) {
+                    setAllHoldStatusButtonLabel("Set Hold Off");
+                } else if (statusData.zones[0].hold === 0 &&
+                           statusData.zones[1].hold === 0 &&
+                           statusData.zones[2].hold === 0) {
+                    setAllHoldStatusButtonLabel("Set Hold On");
+                }
+
+                setAllMode(statusData.all_mode);
+                if (statusData.all_mode === 1) setZoneSelection("all");
+
+                if (statusData.all_mode >= 1 && statusData.all_mode <= 8) {
+                    setAllModeButtonLabel("Set All Mode Off");
+                } else if (statusData.all_mode === 0) {
+                    setAllModeButtonLabel("Set All Mode On");
+                }
+
+                setSystemMode(statusData.system_mode);
+                setSystemFanMode(statusData.fan_mode);
+
+                if (statusData.fan_mode === "Auto") {
+                    setSystemFanModeButtonLabel("Set Always On");
+                } else if (statusData.fan_mode === "Always On") {
+                    setSystemFanModeButtonLabel("Set Auto");
+                }
+
+                setLastUpdated(new Date().toLocaleTimeString([],
+                  { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+            }
         }
     }, [props.status]);
 
@@ -84,16 +115,23 @@ export default function System(props) {
     };
 
     const handleSystemModeChange = (event) => {
-        setSystemModeSelection(event.target.value);
+        const newMode = event.target.value;
+        setSystemModeSelection(newMode);
         setIsSystemModeChangeLoading(true);
-        axios.get(`https://nodered.mtnhouse.casa/hvac/system/mode?mode=${event.target.value}`)
+        setError(null);
+
+        // Use new POST API service (see apiService.js)
+        setSystemModeApi(newMode)
             .then((response) => {
-                console.log(response.data)
-                setIsSystemModeChangeLoading(false)
+                const normalized = normalizeStatus(response);
+                console.log(normalized);
+                setIsSystemModeChangeLoading(false);
             }).catch(error => {
-                console.log(error)
-                setIsSystemModeChangeLoading(false)
-            })
+                console.error(error);
+                setError(`Failed to set system mode: ${error.message}`);
+                // TODO (clarify): Replace console.error with user-facing toast/banner
+                setIsSystemModeChangeLoading(false);
+            });
         setSystemModeSelection("");
     };
 
@@ -101,122 +139,204 @@ export default function System(props) {
         // TODO this should really be a better toggle, but it's manually setting everything now
         // ie buttonlabel should update automatically, not be set everywhere
         setIsFanModeChangeLoading(true);
-        let fan_mode_desired = null
-        if (systemFanMode === "Auto") fan_mode_desired = "always_on"
-        if (systemFanMode === "Always On") fan_mode_desired = "auto"
-        axios.get(`https://nodered.mtnhouse.casa/hvac/system/fan?fan=${fan_mode_desired}`)
-            .then((response) => {
-                console.log(response.data)
-                if (systemFanMode === "Auto") {
-                    setSystemFanMode("Always On");
-                    setSystemFanModeButtonLabel("Set Auto")
-                }
-                else if (systemFanMode === "Always On") {
-                    setSystemFanMode("Auto");
-                    setSystemFanModeButtonLabel("Set Always On")
+        setError(null);
 
-                }
-                else console.log("systemFanMode broken")
-                setIsFanModeChangeLoading(false)
-            }).catch(error => {
-                console.log(error)
-            })
+        // Map frontend labels to backend API values (functional update)
+        setSystemFanMode(prevMode => {
+            const fanModeDesired = prevMode === "Auto" ? "On" : "Auto";
+
+            // Use new POST API service (see apiService.js)
+            setSystemFanApi(fanModeDesired)
+                .then((response) => {
+                    const normalized = normalizeStatus(response);
+                    console.log(normalized);
+
+                    if (prevMode === "Auto") {
+                        setSystemFanModeButtonLabel("Set Auto");
+                    } else if (prevMode === "Always On") {
+                        setSystemFanModeButtonLabel("Set Always On");
+                    }
+                    setIsFanModeChangeLoading(false);
+                }).catch(error => {
+                    console.error(error);
+                    setError(`Failed to set fan mode: ${error.message}`);
+                    // TODO (clarify): Replace console.error with user-facing toast/banner
+                    setIsFanModeChangeLoading(false);
+                });
+
+            return prevMode === "Auto" ? "Always On" : "Auto";
+        });
     }
 
     const handleAllModeChange = (event) => {
         // TODO this should really be a better toggle, but it's manually setting everything now
         // ie buttonlabel should update automatically, not be set everywhere
         setIsAllModeChangeLoading(true);
-        let all_mode_desired = null
-        if ( allMode >= 1 && allMode <= 8) all_mode_desired = "off"
-        if (allMode === 0) all_mode_desired = "on"
-        axios.get(`https://nodered.mtnhouse.casa/hvac/system/allmode?mode=${all_mode_desired}`)
-            .then((response) => {
-                console.log(response.data)
-                if (allMode >= 1 && allMode <= 8) {
-                    setAllMode(allMode);
-                    setAllModeButtonLabel("Set Off")
-                }
-                else if (allMode === 0) {
-                    setAllMode(0);
-                    setAllModeButtonLabel("Set On")
+        setError(null);
 
-                }
-                else console.log("allMode broken")
-                setIsAllModeChangeLoading(false)
-            }).catch(error => {
-                console.log(error)
-                setIsAllModeChangeLoading(false)
-            })
+        // Determine desired all-mode setting (functional update)
+        setAllMode(prevAllMode => {
+            const allModeDesired = (prevAllMode >= 1 && prevAllMode <= 8) ? false : true;
+            const currentSystemMode = systemMode || "Auto";
+
+            // Use new POST API service: systemMode with all=true/false (see apiService.js)
+            setSystemModeApi(currentSystemMode, { all: allModeDesired })
+                .then((response) => {
+                    const normalized = normalizeStatus(response);
+                    console.log(normalized);
+
+                    if (prevAllMode >= 1 && prevAllMode <= 8) {
+                        setAllModeButtonLabel("Set On");
+                    } else if (prevAllMode === 0) {
+                        setAllModeButtonLabel("Set Off");
+                    }
+                    setIsAllModeChangeLoading(false);
+                }).catch(error => {
+                    console.error(error);
+                    setError(`Failed to set all mode: ${error.message}`);
+                    // TODO (clarify): Replace console.error with user-facing toast/banner
+                    setIsAllModeChangeLoading(false);
+                });
+
+            return prevAllMode;
+        });
     }
 
     const handleHoldStatusChange = (event) => {
         if (allMode){
             setIsHoldStatusChangeLoading(true);
-            let hold_status_desired = null
-            if (zone1Hold >= 1 || zone2Hold >= 1 || zone3Hold >= 1) {
-                hold_status_desired = "off"
-                axios.get(`https://nodered.mtnhouse.casa/hvac/sethold?zone=${zone1Hold}&setHold=${hold_status_desired}`)
-                .then((response) => {
-                    console.log(response.data)
-                    setZone1Hold(1);
-                    setZone2Hold(1);
-                    setZone3Hold(1);
-                    setAllHoldStatusButtonLabel("Set Hold On")
-                    setIsHoldStatusChangeLoading(false)
-                }).catch(error => {
-                    console.log("holdStatus broken")
-                    console.log(error)
-                    setIsHoldStatusChangeLoading(false)
-                })
-            }
-            else if (zone1Hold == 0 && zone2Hold == 0 && zone3Hold == 0) {
-                hold_status_desired = "on"
-                axios.get(`https://nodered.mtnhouse.casa/hvac/sethold?zone=all&setHold=${hold_status_desired}`)
-                .then((response) => {
-                    console.log(response.data)
-                    setZone1Hold(allMode);
-                    setZone2Hold(allMode);
-                    setZone3Hold(allMode);
-                    setAllHoldStatusButtonLabel("Set Hold Off")
-                    setIsHoldStatusChangeLoading(false)
-                }).catch(error => {
-                    console.log("holdStatus broken")
-                    console.log(error)
-                    setIsHoldStatusChangeLoading(false)
-                })
-            }
-            else console.log("holdStatus numbers broken")
-            
-        }
-        
-        
+            setError(null);
 
+            // Determine desired hold state (true = enable, false = disable)
+            const holdStatusDesired = (zone1Hold >= 1 || zone2Hold >= 1 || zone3Hold >= 1)
+              ? false
+              : true;
+
+            // Extract actual status from normalized object
+            const statusData = CZ2Status.status || CZ2Status;
+
+            // Use new POST API service: setZoneHold("all", hold, cachedStatus)
+            // (see apiService.js)
+            setZoneHold("all", holdStatusDesired, statusData)
+                .then((responses) => {
+                    // Normalize each response
+                    const normalized = responses.map(r => normalizeStatus(r));
+                    console.log(normalized);
+
+                    if (holdStatusDesired) {
+                        // Hold enabled
+                        setZone1Hold(allMode);
+                        setZone2Hold(allMode);
+                        setZone3Hold(allMode);
+                        setAllHoldStatusButtonLabel("Set Hold Off");
+                    } else {
+                        // Hold disabled
+                        setZone1Hold(0);
+                        setZone2Hold(0);
+                        setZone3Hold(0);
+                        setAllHoldStatusButtonLabel("Set Hold On");
+                    }
+
+                    setIsHoldStatusChangeLoading(false);
+                }).catch(error => {
+                    console.error("Failed to set hold status:", error);
+                    setError(`Failed to set hold status: ${error.message}`);
+                    // TODO (clarify): Replace console.error with user-facing toast/banner
+                    setIsHoldStatusChangeLoading(false);
+                });
+        }
     }
 
     const handleTempChangeSubmit = (event) => {
         event.preventDefault();
         setIsTempChangeLoading(true);
+        setError(null);
 
-        axios.get(`https://nodered.mtnhouse.casa/hvac/settemp?mode=${modeSelection}&temp=${targetTemperatureSelection}&zone=${zoneSelection}`)
-            .then((response) => {
-                console.log(response.data)
-                setIsTempChangeLoading(false)
-            }).catch(error => {
-                setError(error);
-                console.log(error)
-                setIsTempChangeLoading(false)
+        // Validate temperature range (45-80°F)
+        if (targetTemperatureSelection < 45 || targetTemperatureSelection > 80) {
+            setError("Temperature out of range (45-80°F)");
+            // TODO (clarify): Replace with user-facing error toast/banner
+            setIsTempChangeLoading(false);
+            return;
+        }
+
+        // Extract actual status from normalized object
+        const statusData = CZ2Status.status || CZ2Status;
+
+        // Handle "all" zones by issuing parallel requests for each zone
+        if (zoneSelection === "all" && statusData && statusData.zones) {
+            const promises = statusData.zones.map((_, index) => {
+                const zoneId = index + 1;
+                return setZoneTemperature(zoneId, {
+                    mode: modeSelection,
+                    temp: targetTemperatureSelection,
+                    tempFlag: true,
+                });
+            });
+
+            Promise.all(promises)
+                .then((responses) => {
+                    // Normalize each response
+                    const normalized = responses.map(r => normalizeStatus(r));
+                    console.log(normalized);
+                    setIsTempChangeLoading(false);
+                })
+                .catch(error => {
+                    console.error(error);
+                    setError(`Failed to set temperature: ${error.message}`);
+                    // TODO (clarify): Replace console.error with user-facing toast/banner
+                    setIsTempChangeLoading(false);
+                });
+        } else {
+            // Single zone: Use new POST API service (see apiService.js)
+            setZoneTemperature(parseInt(zoneSelection), {
+                mode: modeSelection,
+                temp: targetTemperatureSelection,
+                tempFlag: true,
             })
+                .then((response) => {
+                    const normalized = normalizeStatus(response);
+                    console.log(normalized);
+                    setIsTempChangeLoading(false);
+                }).catch(error => {
+                    console.error(error);
+                    setError(`Failed to set temperature: ${error.message}`);
+                    // TODO (clarify): Replace console.error with user-facing toast/banner
+                    setIsTempChangeLoading(false);
+                });
+        }
     };
 
     const addHoverBorder = (event) => {
         event.target.classList.add("hover-border");
-        console.log(event)
     }
 
     return (
-        <div className='app'>
-            <div className='thermostats'>
+        <div className="app">
+            {/* TODO (clarify): Replace simple error banner with toast/notification library */}
+            {error && (
+                <div style={{
+                    backgroundColor: "#f44336",
+                    color: "white",
+                    padding: "10px",
+                    margin: "10px",
+                    borderRadius: "4px",
+                    textAlign: "center"
+                }}>
+                    {error}
+                    <button
+                        onClick={() => setError(null)}
+                        style={{
+                            marginLeft: "10px",
+                            padding: "5px 10px",
+                            cursor: "pointer"
+                        }}
+                    >
+                        Dismiss
+                    </button>
+                </div>
+            )}
+            <div className="thermostats">
                 <div className='main'>
                     <Thermostat
                         zone={1}

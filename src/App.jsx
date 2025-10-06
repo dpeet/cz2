@@ -1,11 +1,11 @@
-import './App.scss';
+import "./App.scss";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from "react";
 
-import System from './System';
-import { data } from './json_response';
-import mqtt from 'mqtt';
-import mqttp from 'precompiled-mqtt';
+import System from "./System";
+import mqtt from "mqtt";
+import CONFIG from "./config";
+import { normalizeStatus } from "./apiNormalizer";
 
 export default function App() {
   const [connectionStatus, setConnectionStatus] = useState("Not Connected");
@@ -13,58 +13,91 @@ export default function App() {
   const [CZ2Status, setCZ2Status] = useState(false);
   const [hvacTime, setHvacTime] = useState("");
   const [display, setDisplay] = useState(false);
+  const reconnectTimer = useRef(null);
+  const clientRef = useRef(null);
 
   useEffect(() => {
-    // const client = mqttp.connect("wss://mqtt.mtnhouse.casa");
-    const client = mqtt.connect("wss://mqtt.mtnhouse.casa");
+    // Resolve MQTT WebSocket URL with safe fallbacks
+    // Priority: build-time env -> HTTPS-aware default
+    const mqttUrl = CONFIG.mqttWsUrl;
+    const client = mqtt.connect(mqttUrl, {
+      reconnectPeriod: 3000, // 3s automatic reconnect by mqtt.js
+      connectTimeout: 5000,
+    });
+    clientRef.current = client;
 
-    // if (connectionStatus !== "Connected") {
-    //   console.log("Trying to connect")
-    //   if (status === 'development') {
-    //     if(!CZ2Status){
-    //       console.log("Setting Default Data")
-    //       setCZ2Status(data)
-    //       setDisplay(true)      
-    //     }
-    //   }
-    // }
-    if (connectionStatus !== "Connected" && initialUpdate === false) {
-      console.log("Initial Update")
-      // axios.get('https://nodered.mtnhouse.casa/hvac/update')
-      //   .then((response) => {
-      //     console.log(response.data)
-      //   }).catch(error => {
-      //     console.log(error)
-      // })
-      setInitialUpdate(true)
+    // Request initial HVAC update on first connection attempt
+    if (!initialUpdate) {
+      console.log("Initial Update");
+      setInitialUpdate(true);
     }
-    client.on('connect', () => {
-      console.log('Connected');
-      client.subscribe('hvac/cz2');
+
+    client.on("connect", () => {
+      console.log("Connected");
+      // Subscribe to all CZ2 topics (covers legacy and new forms)
+      client.subscribe("hvac/cz2/#");
       setConnectionStatus("Connected");
     });
-    client.on('message', (topic, payload, packet) => {
-      // setMessages(messages.concat(payload.toString()));
-      if (topic === 'hvac/cz2') {
-        // console.log(payload.toString())
-        let json_payload = JSON.parse(payload.toString())
-        if (json_payload['time'] !== hvacTime){
-          setCZ2Status(json_payload);
-          setHvacTime(json_payload['time'])    
-          setDisplay(true)      
+
+    client.on("message", (topic, payload, packet) => {
+      if (topic === "hvac/cz2" || topic === "hvac/cz2/status") {
+        try {
+          const jsonPayload = JSON.parse(payload.toString());
+          // Normalize MQTT payload per MOUNTAINSTAT_MIGRATION_PLAN.md
+          const normalized = normalizeStatus(jsonPayload);
+
+          // Support both flat and structured payloads
+          const statusPart = jsonPayload?.status ?? jsonPayload;
+          const metaPart = jsonPayload?.meta ?? {};
+
+          // Determine a message timestamp to de-dup frames
+          const messageTime =
+            statusPart?.time ??
+            statusPart?.system_time ??
+            metaPart?.last_update_time ??
+            metaPart?.last_update_ts ??
+            hvacTime;
+
+          // Always show UI on first valid message
+          if (!display) setDisplay(true);
+          if (messageTime !== hvacTime) {
+            setCZ2Status(normalized);
+            setHvacTime(messageTime);
+          }
+        } catch (e) {
+          console.error("Failed to parse MQTT payload", e);
         }
       }
     });
-    client.on('error', (err) => {
-      console.error('Connection error: ', err);
-      client.end();
-    });
-  }, []);
 
+    client.on("error", (err) => {
+      console.error("Connection error: ", err);
+      // mqtt.js will auto-reconnect; don't end() here
+      setConnectionStatus("Error (reconnecting)");
+    });
+
+    client.on("close", () => {
+      setConnectionStatus("Disconnected (reconnecting)");
+    });
+
+    // Cleanup: close MQTT connection when component unmounts
+    return () => {
+      try { client.end(true); } catch {}
+      clientRef.current = null;
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div>
-      {display ? <System status={CZ2Status} connection={connectionStatus}></System> : "Loading..."}
+      {display ? (
+        <System status={CZ2Status} connection={connectionStatus}></System>
+      ) : (
+        "Loading..."
+      )}
     </div>
-  )
+  );
 }
