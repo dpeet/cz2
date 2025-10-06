@@ -48,12 +48,17 @@ class TestAPIIntegration:
         async def noop(*args, **kwargs):
             return None
 
-        hvac_client_patch = patch('pycz2.hvac_service.get_client', lambda: mock_client)
-        hvac_start_patch = patch('pycz2.hvac_service.HVACService.start', noop)
-        hvac_stop_patch = patch('pycz2.hvac_service.HVACService.stop', noop)
+        hvac_client_patch = patch("pycz2.hvac_service.get_client", lambda: mock_client)
+        hvac_start_patch = patch("pycz2.hvac_service.HVACService.start", noop)
+        hvac_stop_patch = patch("pycz2.hvac_service.HVACService.stop", noop)
 
         # Disable worker mode for tests (use synchronous mode)
-        with patch('pycz2.api.settings.WORKER_ENABLED', False), hvac_client_patch, hvac_start_patch, hvac_stop_patch:
+        with (
+            patch("pycz2.api.settings.WORKER_ENABLED", False),
+            hvac_client_patch,
+            hvac_start_patch,
+            hvac_stop_patch,
+        ):
             yield app
 
         # Clean up overrides after test
@@ -77,7 +82,7 @@ class TestAPIIntegration:
                 heat_setpoint=68,
                 temporary=False,
                 hold=False,
-                out=False
+                out=False,
             ),
             ZoneStatus(
                 zone_id=2,
@@ -87,10 +92,10 @@ class TestAPIIntegration:
                 heat_setpoint=68,
                 temporary=False,
                 hold=False,
-                out=False
-            )
+                out=False,
+            ),
         ]
-        
+
         return SystemStatus(
             system_time="Mon 02:30pm",
             system_mode=SystemMode.AUTO,
@@ -110,7 +115,7 @@ class TestAPIIntegration:
             dehumidify=False,
             reversing_valve=False,
             raw=None,
-            zones=zones
+            zones=zones,
         )
 
     def test_get_status_success(self, client, mock_client, sample_status):
@@ -193,7 +198,8 @@ class TestAPIIntegration:
         assert data["fan_mode"] == "Auto"
         assert data["fan_state"] == "On"
         assert data["active_state"] == "Cool On"
-        assert data["all_mode"] is False
+        # flat=1 converts all_mode boolean to numeric (0/1)
+        assert data["all_mode"] == 0  # False becomes 0
         assert data["outside_temp"] == 85
         assert data["air_handler_temp"] == 65
         assert data["zone1_humidity"] == 45
@@ -207,12 +213,18 @@ class TestAPIIntegration:
         assert "raw" not in data
         assert len(data["zones"]) == 2
 
+        # Verify flat format includes time field
+        assert "time" in data
+        assert isinstance(data["time"], int)
+
         # Verify zone data
         zone1 = data["zones"][0]
         assert zone1["zone_id"] == 1
         assert zone1["temperature"] == 72
         assert zone1["cool_setpoint"] == 74
         assert zone1["heat_setpoint"] == 68
+        # flat=1 converts damper_position to string
+        assert isinstance(zone1["damper_position"], str)
 
     def test_get_status_with_raw(self, client, mock_client, sample_status):
         """Test GET /status returns raw blob when requested."""
@@ -256,7 +268,9 @@ class TestAPIIntegration:
         assert status["system_mode"] == "Off"
         assert status["zones"] == []
 
-    def test_post_update_success(self, client, mock_client, mock_mqtt_client, sample_status):
+    def test_post_update_success(
+        self, client, mock_client, mock_mqtt_client, sample_status
+    ):
         """Test successful POST /update request."""
         # Configure mocks
         mock_client.get_status_data.return_value = sample_status
@@ -277,22 +291,21 @@ class TestAPIIntegration:
         # Verify mocks were called
         mock_client.get_status_data.assert_called_once()
 
-    def test_post_system_mode_success(self, client, mock_client, mock_mqtt_client, sample_status):
+    def test_post_system_mode_success(
+        self, client, mock_client, mock_mqtt_client, sample_status
+    ):
         """Test successful POST /system/mode request."""
         # Configure mocks
         mock_client.set_system_mode.return_value = None
         mock_client.get_status_data.return_value = sample_status
         mock_mqtt_client.publish_status.return_value = None
-        
+
         # Request payload
-        payload = {
-            "mode": "Heat",
-            "all": True
-        }
-        
+        payload = {"mode": "Heat", "all": True}
+
         # Make request
         response = client.post("/system/mode", json=payload)
-        
+
         # Verify response - with cache enabled, returns structured format
         assert response.status_code == 200
         data = response.json()
@@ -302,39 +315,36 @@ class TestAPIIntegration:
 
         # Verify mock was called with correct arguments
         mock_client.set_system_mode.assert_called_once_with(
-            mode=SystemMode.HEAT,
-            all_zones_mode=True
+            mode=SystemMode.HEAT, all_zones_mode=True
         )
         mock_client.get_status_data.assert_called_once()
 
     def test_post_system_mode_invalid_data(self, client):
         """Test POST /system/mode with invalid data."""
         # Invalid mode
-        payload = {
-            "mode": "InvalidMode"
-        }
-        
+        payload = {"mode": "InvalidMode"}
+
         # Make request
         response = client.post("/system/mode", json=payload)
-        
+
         # Verify error response
         assert response.status_code == 422  # Validation error
 
-    def test_post_system_fan_success(self, client, mock_client, mock_mqtt_client, sample_status):
+    def test_post_system_fan_success(
+        self, client, mock_client, mock_mqtt_client, sample_status
+    ):
         """Test successful POST /system/fan request."""
         # Configure mocks
         mock_client.set_fan_mode.return_value = None
         mock_client.get_status_data.return_value = sample_status
         mock_mqtt_client.publish_status.return_value = None
-        
+
         # Request payload
-        payload = {
-            "fan": "On"
-        }
-        
+        payload = {"fan": "On"}
+
         # Make request
         response = client.post("/system/fan", json=payload)
-        
+
         # Verify response - with cache enabled, returns structured format
         assert response.status_code == 200
         data = response.json()
@@ -346,23 +356,19 @@ class TestAPIIntegration:
         mock_client.set_fan_mode.assert_called_once_with(FanMode.ON)
         mock_client.get_status_data.assert_called_once()
 
-    @patch('pycz2.api.settings.CZ_ZONES', 4)  # Mock 4 zones for this test
-    def test_post_zone_temperature_success(self, client, mock_client, mock_mqtt_client, sample_status):
+    @patch("pycz2.api.settings.CZ_ZONES", 4)  # Mock 4 zones for this test
+    def test_post_zone_temperature_success(
+        self, client, mock_client, mock_mqtt_client, sample_status
+    ):
         """Test successful POST /zones/{zone_id}/temperature request."""
         # Configure mocks
         mock_client.set_zone_setpoints.return_value = None
         mock_client.get_status_data.return_value = sample_status
         mock_mqtt_client.publish_status.return_value = None
-        
+
         # Request payload
-        payload = {
-            "heat": 70,
-            "cool": 76,
-            "temp": True,
-            "hold": False,
-            "out": False
-        }
-        
+        payload = {"heat": 70, "cool": 76, "temp": True, "hold": False, "out": False}
+
         # Make request
         response = client.post("/zones/2/temperature", json=payload)
 
@@ -372,7 +378,7 @@ class TestAPIIntegration:
         assert "status" in data
         assert "meta" in data
         assert data["status"]["system_mode"] == "Auto"
-        
+
         # Verify mock was called with correct arguments
         mock_client.set_zone_setpoints.assert_called_once_with(
             zones=[2],
@@ -380,22 +386,19 @@ class TestAPIIntegration:
             cool_setpoint=76,
             temporary_hold=True,
             hold=False,
-            out_mode=False
+            out_mode=False,
         )
         mock_client.get_status_data.assert_called_once()
 
-    @patch('pycz2.api.settings.CZ_ZONES', 4)  # Mock 4 zones for this test
+    @patch("pycz2.api.settings.CZ_ZONES", 4)  # Mock 4 zones for this test
     def test_post_zone_temperature_invalid_zone(self, client):
         """Test POST /zones/{zone_id}/temperature with invalid zone ID."""
         # Request payload
-        payload = {
-            "heat": 70,
-            "cool": 76
-        }
-        
+        payload = {"heat": 70, "cool": 76}
+
         # Make request with invalid zone (zone 99 when only 4 zones exist)
         response = client.post("/zones/99/temperature", json=payload)
-        
+
         # Verify error response
         assert response.status_code == 404
         data = response.json()
@@ -406,29 +409,28 @@ class TestAPIIntegration:
         # Invalid heat setpoint (too low)
         payload = {
             "heat": 30,  # Below minimum of 45
-            "cool": 76
+            "cool": 76,
         }
-        
+
         # Make request
         response = client.post("/zones/1/temperature", json=payload)
-        
+
         # Verify validation error
         assert response.status_code == 422
 
-    @patch('pycz2.api.settings.CZ_ZONES', 4)  # Mock 4 zones for this test  
-    def test_post_zone_hold_success(self, client, mock_client, mock_mqtt_client, sample_status):
+    @patch("pycz2.api.settings.CZ_ZONES", 4)  # Mock 4 zones for this test
+    def test_post_zone_hold_success(
+        self, client, mock_client, mock_mqtt_client, sample_status
+    ):
         """Test successful POST /zones/{zone_id}/hold request."""
         # Configure mocks
         mock_client.set_zone_setpoints.return_value = None
         mock_client.get_status_data.return_value = sample_status
         mock_mqtt_client.publish_status.return_value = None
-        
+
         # Request payload
-        payload = {
-            "hold": True,
-            "temp": False
-        }
-        
+        payload = {"hold": True, "temp": False}
+
         # Make request
         response = client.post("/zones/3/hold", json=payload)
 
@@ -438,26 +440,22 @@ class TestAPIIntegration:
         assert "status" in data
         assert "meta" in data
         assert data["status"]["system_mode"] == "Auto"
-        
+
         # Verify mock was called with correct arguments
         mock_client.set_zone_setpoints.assert_called_once_with(
-            zones=[3],
-            hold=True,
-            temporary_hold=False
+            zones=[3], hold=True, temporary_hold=False
         )
         mock_client.get_status_data.assert_called_once()
 
-    @patch('pycz2.api.settings.CZ_ZONES', 2)  # Mock 2 zones for this test
+    @patch("pycz2.api.settings.CZ_ZONES", 2)  # Mock 2 zones for this test
     def test_post_zone_hold_invalid_zone(self, client):
         """Test POST /zones/{zone_id}/hold with invalid zone ID."""
         # Request payload
-        payload = {
-            "hold": True
-        }
-        
+        payload = {"hold": True}
+
         # Make request with invalid zone (zone 5 when only 2 zones exist)
         response = client.post("/zones/5/hold", json=payload)
-        
+
         # Verify error response
         assert response.status_code == 404
         data = response.json()
@@ -478,7 +476,7 @@ class TestAPIIntegration:
         response = client.post(
             "/system/mode",
             data="invalid json",
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json"},
         )
         assert response.status_code == 422
 
@@ -489,7 +487,7 @@ class TestAPIIntegration:
             "all": True
             # Missing required 'mode' field
         }
-        
+
         response = client.post("/system/mode", json=payload)
         assert response.status_code == 422
 
@@ -497,25 +495,23 @@ class TestAPIIntegration:
         """Test exception during set operation."""
         # Configure mock to raise exception during set operation
         mock_client.set_system_mode.side_effect = Exception("Communication error")
-        
-        payload = {
-            "mode": "Heat"
-        }
-        
+
+        payload = {"mode": "Heat"}
+
         response = client.post("/system/mode", json=payload)
-        
+
         # Should get 500 error since exception occurs before get_status_and_publish
         assert response.status_code == 500
 
-    def test_retry_error_during_update_operation(self, client, mock_client, mock_mqtt_client):
+    def test_retry_error_during_update_operation(
+        self, client, mock_client, mock_mqtt_client
+    ):
         """Test RetryError during update operation."""
         # Configure mocks - set succeeds but get_status_data fails
         mock_client.set_system_mode.return_value = None
         mock_client.get_status_data.side_effect = RetryError(None)
 
-        payload = {
-            "mode": "Heat"
-        }
+        payload = {"mode": "Heat"}
 
         response = client.post("/system/mode", json=payload)
 

@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from tenacity import RetryError
 
-from .cache import get_cache, StateCache
+from .cache import get_cache
 from .config import settings
 from .core.client import ComfortZoneIIClient, get_client, get_lock
 from .core.models import (
@@ -21,7 +21,7 @@ from .core.models import (
     ZoneTemperatureArgs,
 )
 from .mqtt import MqttClient, get_mqtt_client
-from .worker import CommandType, calculate_provisional_state, get_worker, HVACWorker
+from .worker import CommandType, calculate_provisional_state, get_worker
 from .sse import get_sse_manager, create_sse_response
 from .hvac_service import get_hvac_service, shutdown_hvac_service
 
@@ -35,8 +35,18 @@ def _is_truthy(value: str | None) -> bool:
     return value is not None and value.lower() in {"1", "true", "yes", "on"}
 
 
-def _status_payload(status: SystemStatus | None, include_raw: bool = False) -> dict:
-    return status.to_dict(include_raw=include_raw) if status else {}
+def _status_payload(
+    status: SystemStatus | None, include_raw: bool = False, flat: bool = False
+) -> dict:
+    """
+    Convert SystemStatus to dictionary payload.
+
+    Args:
+        status: System status object to convert
+        include_raw: Include raw HVAC data blob
+        flat: Apply legacy flat format transformations (for ?flat=1)
+    """
+    return status.to_dict(include_raw=include_raw, flat=flat) if status else {}
 
 
 @asynccontextmanager
@@ -46,14 +56,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Initialize cache if enabled
     if settings.ENABLE_CACHE:
-        cache = await get_cache()
+        await get_cache()
         log.info("Cache initialized")
 
     # Start HVAC service (CLI-style) if worker disabled
-    service_task = None
     if not settings.WORKER_ENABLED:
         log.info("Starting HVAC service (CLI-style mode)")
-        service = await get_hvac_service()
+        await get_hvac_service()
         # Service starts its own background refresh loop internally
 
     # Start worker if enabled (being phased out)
@@ -101,17 +110,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     raise
                 except Exception as e:
                     consecutive_failures += 1
-                    log.error(f"Error in MQTT publisher task ({consecutive_failures}/{max_consecutive_failures}): {e}", exc_info=True)
+                    log.error(
+                        f"Error in MQTT publisher task ({consecutive_failures}/{max_consecutive_failures}): {e}",
+                        exc_info=True,
+                    )
                     if consecutive_failures >= max_consecutive_failures:
                         log.error(
                             f"MQTT publisher task failed {max_consecutive_failures} times, stopping"
                         )
                         break
-                    
+
                     # Exponential backoff
-                    backoff_time = min(
-                        backoff_base ** consecutive_failures, max_backoff
-                    )
+                    backoff_time = min(backoff_base**consecutive_failures, max_backoff)
                     log.info(f"Backing off for {backoff_time:.1f}s before retry")
                     await asyncio.sleep(backoff_time)
 
@@ -164,7 +174,13 @@ app = FastAPI(
 # Configure CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://10.0.1.15:5173", "https://mtnhouse.casa"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://10.0.1.15:5173",
+        "https://mtnhouse.casa",
+        "https://tstat.mtnhouse.casa",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -223,12 +239,12 @@ async def get_current_status(
 
         if use_flat_format:
             # Legacy flat format - just the status data
-            return _status_payload(status, include_raw=raw_requested)
+            return _status_payload(status, include_raw=raw_requested, flat=True)
         else:
             # New structured format with metadata
             return {
                 "status": _status_payload(status, include_raw=raw_requested),
-                "meta": meta.to_dict()
+                "meta": meta.to_dict(),
             }
     elif settings.ENABLE_CACHE:
         # Return from cache immediately
@@ -240,12 +256,12 @@ async def get_current_status(
 
         if use_flat_format:
             # Legacy flat format - just the status data
-            return _status_payload(status, include_raw=raw_requested)
+            return _status_payload(status, include_raw=raw_requested, flat=True)
         else:
             # New structured format with metadata
             return {
                 "status": _status_payload(status, include_raw=raw_requested),
-                "meta": meta.to_dict()
+                "meta": meta.to_dict(),
             }
     else:
         # Legacy behavior: direct query
@@ -255,7 +271,7 @@ async def get_current_status(
 
                 if use_flat_format:
                     # Legacy flat format
-                    return _status_payload(status, include_raw=raw_requested)
+                    return _status_payload(status, include_raw=raw_requested, flat=True)
                 else:
                     # New format (even without cache, provide minimal meta)
                     return {
@@ -263,13 +279,14 @@ async def get_current_status(
                         "meta": {
                             "connected": True,
                             "is_stale": False,
-                            "source": "direct"
-                        }
+                            "source": "direct",
+                        },
                     }
             except RetryError as e:
                 log.error(f"Failed to get status: {e}")
                 raise HTTPException(
-                    status_code=504, detail="Could not communicate with HVAC controller."
+                    status_code=504,
+                    detail="Could not communicate with HVAC controller.",
                 ) from e
 
 
@@ -296,7 +313,7 @@ async def force_update_and_publish(
             return {
                 "status": _status_payload(status),
                 "meta": meta.to_dict(),
-                "message": "Status refreshed successfully"
+                "message": "Status refreshed successfully",
             }
         elif settings.WORKER_ENABLED:
             # Get current state (will be refreshed by worker)
@@ -308,7 +325,7 @@ async def force_update_and_publish(
             cmd_status = await worker.enqueue_command(
                 CommandType.POLL_STATUS,
                 {},
-                priority=2  # Medium priority for refresh
+                priority=2,  # Medium priority for refresh
             )
 
             # Return 202 with current state (will be updated via SSE)
@@ -318,9 +335,11 @@ async def force_update_and_publish(
                     "command_id": cmd_status.id,
                     "status": cmd_status.status,
                     "message": "Status refresh queued",
-                    "current_state": _status_payload(current_status) if current_status else None,
-                    "check_status_at": f"/commands/{cmd_status.id}"
-                }
+                    "current_state": _status_payload(current_status)
+                    if current_status
+                    else None,
+                    "check_status_at": f"/commands/{cmd_status.id}",
+                },
             )
         else:
             # Worker disabled - execute synchronously (legacy)
@@ -365,9 +384,7 @@ async def set_system_mode(
             # Use HVAC service for CLI-style operations
             service = await get_hvac_service()
             await service.execute_command(
-                "set_system_mode",
-                mode=args.mode,
-                all_zones=args.all
+                "set_system_mode", mode=args.mode, all_zones=args.all
             )
 
             # Retrieve latest status/meta from cache (service updated it)
@@ -380,7 +397,7 @@ async def set_system_mode(
             return {
                 "status": _status_payload(status_obj),
                 "meta": meta.to_dict(),
-                "message": f"System mode set to {args.mode}"
+                "message": f"System mode set to {args.mode}",
             }
         elif settings.WORKER_ENABLED:
             # Get current state for provisional calculation
@@ -392,14 +409,12 @@ async def set_system_mode(
             cmd_status = await worker.enqueue_command(
                 CommandType.SET_SYSTEM_MODE,
                 {"mode": args.mode, "all_zones_mode": args.all},
-                priority=1  # High priority for user commands
+                priority=1,  # High priority for user commands
             )
 
             # Calculate provisional state
             provisional = calculate_provisional_state(
-                current_status,
-                CommandType.SET_SYSTEM_MODE,
-                cmd_status.args
+                current_status, CommandType.SET_SYSTEM_MODE, cmd_status.args
             )
 
             # Return 202 with command info
@@ -409,8 +424,8 @@ async def set_system_mode(
                     "command_id": cmd_status.id,
                     "status": cmd_status.status,
                     "provisional_state": provisional,
-                    "check_status_at": f"/commands/{cmd_status.id}"
-                }
+                    "check_status_at": f"/commands/{cmd_status.id}",
+                },
             )
         else:
             # Worker disabled - execute synchronously (legacy)
@@ -455,10 +470,7 @@ async def set_system_fan(
         if not settings.WORKER_ENABLED:
             # Use HVAC service for CLI-style operations
             service = await get_hvac_service()
-            await service.execute_command(
-                "set_fan_mode",
-                fan_mode=args.fan
-            )
+            await service.execute_command("set_fan_mode", fan_mode=args.fan)
 
             status_obj, meta = await service.get_status(force_refresh=False)
 
@@ -469,7 +481,7 @@ async def set_system_fan(
             return {
                 "status": _status_payload(status_obj),
                 "meta": meta.to_dict(),
-                "message": f"Fan mode set to {args.fan}"
+                "message": f"Fan mode set to {args.fan}",
             }
         elif settings.WORKER_ENABLED:
             # Get current state for provisional calculation
@@ -481,14 +493,14 @@ async def set_system_fan(
             cmd_status = await worker.enqueue_command(
                 CommandType.SET_FAN_MODE,
                 {"fan": args.fan},
-                priority=1  # High priority for user commands
+                priority=1,  # High priority for user commands
             )
 
             # Calculate provisional state
             provisional = calculate_provisional_state(
                 current_status,
                 CommandType.SET_FAN_MODE,
-                {"mode": args.fan}  # Note: provisional expects 'mode' key
+                {"mode": args.fan},  # Note: provisional expects 'mode' key
             )
 
             # Return 202 with command info
@@ -498,8 +510,8 @@ async def set_system_fan(
                     "command_id": cmd_status.id,
                     "status": cmd_status.status,
                     "provisional_state": provisional,
-                    "check_status_at": f"/commands/{cmd_status.id}"
-                }
+                    "check_status_at": f"/commands/{cmd_status.id}",
+                },
             )
         else:
             # Worker disabled - execute synchronously (legacy)
@@ -558,7 +570,7 @@ async def set_zone_temperature(
                 cool_setpoint=args.cool,
                 temporary_hold=args.temp,
                 hold=args.hold,
-                out_mode=args.out
+                out_mode=args.out,
             )
 
             status_obj, meta = await service.get_status(force_refresh=False)
@@ -570,7 +582,7 @@ async def set_zone_temperature(
             return {
                 "status": _status_payload(status_obj),
                 "meta": meta.to_dict(),
-                "message": f"Zone {zone_id} temperature updated"
+                "message": f"Zone {zone_id} temperature updated",
             }
         elif settings.WORKER_ENABLED:
             # Get current state for provisional calculation
@@ -589,14 +601,12 @@ async def set_zone_temperature(
                     "hold": args.hold,
                     "out_mode": args.out,
                 },
-                priority=1  # High priority for user commands
+                priority=1,  # High priority for user commands
             )
 
             # Calculate provisional state
             provisional = calculate_provisional_state(
-                current_status,
-                CommandType.SET_ZONE_TEMPERATURE,
-                cmd_status.args
+                current_status, CommandType.SET_ZONE_TEMPERATURE, cmd_status.args
             )
 
             # Return 202 with command info
@@ -606,8 +616,8 @@ async def set_zone_temperature(
                     "command_id": cmd_status.id,
                     "status": cmd_status.status,
                     "provisional_state": provisional,
-                    "check_status_at": f"/commands/{cmd_status.id}"
-                }
+                    "check_status_at": f"/commands/{cmd_status.id}",
+                },
             )
         else:
             # Worker disabled - execute synchronously (legacy)
@@ -667,7 +677,7 @@ async def set_zone_hold(
                 "set_zone_setpoints",
                 zones=[zone_id],
                 hold=args.hold,
-                temporary_hold=args.temp
+                temporary_hold=args.temp,
             )
 
             status_obj, meta = await service.get_status(force_refresh=False)
@@ -679,7 +689,7 @@ async def set_zone_hold(
             return {
                 "status": _status_payload(status_obj),
                 "meta": meta.to_dict(),
-                "message": f"Zone {zone_id} hold settings updated"
+                "message": f"Zone {zone_id} hold settings updated",
             }
         elif settings.WORKER_ENABLED:
             # Get current state for provisional calculation
@@ -690,19 +700,13 @@ async def set_zone_hold(
             worker = await get_worker()
             cmd_status = await worker.enqueue_command(
                 CommandType.SET_ZONE_HOLD,
-                {
-                    "zones": [zone_id],
-                    "hold": args.hold,
-                    "temporary_hold": args.temp
-                },
-                priority=1  # High priority for user commands
+                {"zones": [zone_id], "hold": args.hold, "temporary_hold": args.temp},
+                priority=1,  # High priority for user commands
             )
 
             # Calculate provisional state
             provisional = calculate_provisional_state(
-                current_status,
-                CommandType.SET_ZONE_HOLD,
-                cmd_status.args
+                current_status, CommandType.SET_ZONE_HOLD, cmd_status.args
             )
 
             # Return 202 with command info
@@ -712,8 +716,8 @@ async def set_zone_hold(
                     "command_id": cmd_status.id,
                     "status": cmd_status.status,
                     "provisional_state": provisional,
-                    "check_status_at": f"/commands/{cmd_status.id}"
-                }
+                    "check_status_at": f"/commands/{cmd_status.id}",
+                },
             )
         else:
             # Worker disabled - execute synchronously (legacy)
@@ -772,7 +776,7 @@ async def get_live_status(
         return {
             "status": _status_payload(status),
             "source": "live",
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
     except RetryError as e:
         log.error(f"Failed to get live status: {e}")
@@ -820,7 +824,7 @@ async def health_check() -> dict:
             "mqtt_enabled": settings.MQTT_ENABLED,
             "sse_enabled": settings.ENABLE_SSE,
             "worker_enabled": settings.WORKER_ENABLED,
-        }
+        },
     }
 
     # Add cache health if enabled
@@ -861,7 +865,7 @@ async def health_check() -> dict:
     # Check background tasks
     health_status["background_tasks"] = {
         "active": len(background_tasks),
-        "running": all(not task.done() for task in background_tasks)
+        "running": all(not task.done() for task in background_tasks),
     }
 
     if not health_status["background_tasks"]["running"]:
@@ -880,17 +884,14 @@ async def get_command_status(command_id: str) -> dict:
     if not settings.WORKER_ENABLED:
         raise HTTPException(
             status_code=503,
-            detail="Worker is not enabled, command tracking unavailable"
+            detail="Worker is not enabled, command tracking unavailable",
         )
 
     worker = await get_worker()
     status = await worker.tracker.get(command_id)
 
     if not status:
-        raise HTTPException(
-            status_code=404,
-            detail="Command not found or expired"
-        )
+        raise HTTPException(status_code=404, detail="Command not found or expired")
 
     return {
         "id": status.id,
@@ -900,7 +901,7 @@ async def get_command_status(command_id: str) -> dict:
         "completed_at": status.completed_at,
         "result": status.result,
         "error": status.error,
-        "cache_version": status.cache_version
+        "cache_version": status.cache_version,
     }
 
 

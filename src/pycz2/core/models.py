@@ -37,13 +37,53 @@ class SystemStatus(BaseModel):
     raw: str | None = None
     zones: list[ZoneStatus]
 
-    def to_dict(self, include_raw: bool = False) -> dict:
-        exclude = None if include_raw else {"raw"}
-        return self.model_dump(exclude=exclude, exclude_none=True)
+    def to_dict(self, include_raw: bool = False, flat: bool = False) -> dict:
+        """
+        Convert SystemStatus to dictionary.
 
-    def to_json(self, include_raw: bool = False, **kwargs) -> str:
+        Args:
+            include_raw: Include raw HVAC data blob
+            flat: Apply legacy flat format transformations for backwards compatibility
+        """
+        import time as time_module
+
         exclude = None if include_raw else {"raw"}
-        return self.model_dump_json(exclude=exclude, exclude_none=True, **kwargs)
+        data = self.model_dump(exclude=exclude, exclude_none=True)
+
+        if flat:
+            # Parity Requirement 2: Convert all_mode boolean to numeric (0/1)
+            # Integers 1-8 pass through unchanged (future-proof)
+            if isinstance(data.get("all_mode"), bool):
+                data["all_mode"] = 1 if data["all_mode"] else 0
+
+            # Parity Requirement 3: Add time field (Unix timestamp)
+            data["time"] = int(time_module.time())
+
+            # Parity Requirement 4: Convert damper_position to string in all zones
+            for zone in data.get("zones", []):
+                if "damper_position" in zone:
+                    zone["damper_position"] = str(zone["damper_position"])
+
+        return data
+
+    def to_json(self, include_raw: bool = False, flat: bool = False, **kwargs) -> str:
+        """
+        Convert SystemStatus to JSON string.
+
+        Args:
+            include_raw: Include raw HVAC data blob
+            flat: Apply legacy flat format transformations for backwards compatibility
+        """
+        # Use to_dict for flat transformations, then serialize to JSON
+        if flat:
+            import json
+
+            data = self.to_dict(include_raw=include_raw, flat=True)
+            return json.dumps(data, **kwargs)
+        else:
+            exclude = None if include_raw else {"raw"}
+            return self.model_dump_json(exclude=exclude, exclude_none=True, **kwargs)
+
 
 # --- API Argument Models ---
 
