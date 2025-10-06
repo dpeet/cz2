@@ -4,15 +4,13 @@
  */
 
 import axios from "axios";
-import CONFIG from "./config";
+import { resolveConfig } from "./config";
 
 // Get base URL from environment or fallback to window.location.origin
-const getBaseUrl = () => CONFIG.apiBaseUrl;
+const getBaseUrl = () => resolveConfig().apiBaseUrl;
 
 // Get API timeout from environment with fallback to 5000ms
-const getTimeout = () => {
-  return CONFIG.apiTimeoutMs;
-};
+const getTimeout = () => resolveConfig().apiTimeoutMs;
 
 // Lazy-initialized axios instance to support testing
 let apiClient = null;
