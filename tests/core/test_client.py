@@ -1,5 +1,5 @@
 # tests/core/test_client.py
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from tenacity import RetryError
@@ -16,15 +16,20 @@ class TestComfortZoneIIClient:
     @pytest.fixture
     def mock_reader(self):
         """Create a mock StreamReader."""
-        reader = AsyncMock()
-        reader.read.return_value = b""
+        reader = MagicMock()
+        reader.read = AsyncMock(return_value=b"")
         return reader
 
     @pytest.fixture
     def mock_writer(self):
         """Create a mock StreamWriter."""
-        writer = AsyncMock()
-        writer.is_closing.return_value = False
+        writer = MagicMock()
+        writer.is_closing = MagicMock(return_value=False)
+        writer.close = MagicMock(return_value=None)
+        writer.wait_closed = AsyncMock(return_value=None)
+        writer.write = MagicMock(return_value=None)
+        writer.drain = AsyncMock(return_value=None)
+        writer.get_extra_info = MagicMock(return_value=None)
         return writer
 
     @pytest.fixture

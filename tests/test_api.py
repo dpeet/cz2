@@ -475,7 +475,7 @@ class TestAPIIntegration:
         """Test request with malformed JSON."""
         response = client.post(
             "/system/mode",
-            data="invalid json",
+            content="invalid json",
             headers={"Content-Type": "application/json"},
         )
         assert response.status_code == 422
