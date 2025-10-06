@@ -12,14 +12,16 @@ bridged over TCP) using asynchronous clients and a caching layer.
 ## Architecture
 
 - **FastAPI server** (`src/pycz2/api.py`): REST endpoints for system/zone
-   control and the `/status?flat=1` parity response consumed by the frontend and
-   MQTT subscribers.
+   control, `/status?flat=1` parity responses, SSE streaming, and
+   202/command-tracking semantics consumed by the frontend and MQTT clients.
 - **HVAC service** (`src/pycz2/hvac_service.py`): Orchestrates cache refreshes,
    command execution, and metadata (staleness, control disable reasons).
 - **MQTT publisher** (`src/pycz2/mqtt.py`): Uses `aiomqtt` with an async context
    manager to publish snapshots to `hvac/cz2`.
 - **CLI entrypoints** (`src/pycz2/cli.py`): Operational tooling for status
    checks, zone adjustments, and monitoring during troubleshooting.
+- **Command reference** (`docs/API_COMMANDS.md`): Human-readable contract for
+   all POST command endpoints (system, fan, zones, update).
 - **Core protocol modules** (`src/pycz2/core/`): Frame encoding/decoding,
    transport abstractions, and typed models.
 
@@ -45,6 +47,10 @@ uv run ruff check .
 uv run mypy src/
 uv run pyright src/
 uv run pylint src/ --errors-only
+
+# Container build/publish
+docker build -t mountainstat-backend .
+docker run --rm --env-file .env -p 8000:8000 mountainstat-backend
 ```
 
 ## Configuration
@@ -60,6 +66,9 @@ MQTT_PORT=1883
 MQTT_TOPIC_PREFIX=hvac/cz2
 MQTT_PUBLISH_INTERVAL=60
 ENABLE_CACHE=true              # Serve cached data when HVAC offline
+ENABLE_SSE=true                 # Push updates over /events SSE stream
+SSE_HEARTBEAT_INTERVAL=30
+COMMAND_TIMEOUT_SECONDS=30
 API_HOST=0.0.0.0
 API_PORT=8000
 ```
@@ -75,7 +84,8 @@ API_PORT=8000
 
 - Worker remains disabled (CLI/cron style operation). Re-enabling background
    polling will require careful cache+scheduler updates.
-- SSE endpoint exists but is not yet part of the production flow; integration
-   will follow once MQTT usage is battle-tested.
+- SSE endpoint is live and consumed by the `mountainstat/` SSE prototype;
+   coordinate with `mountainstat-main` when migrating the production UI to
+   /events.
 - Additional integration tests for command workflows (fan, temperature) are
    planned after manual validation.
