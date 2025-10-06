@@ -13,7 +13,7 @@ Mountainstat is a React-based virtual thermostat application for controlling a C
 npm install
 
 # Start development server (includes --host flag for network access)
-npm run dev
+npm run dev -- --host
 
 # Build for production (Home Assistant/Caddy deployment)
 npm run build
@@ -26,6 +26,9 @@ npm test
 
 # Run tests with UI
 npm run test:ui
+
+# Build production container
+docker build -t mountainstat-frontend .
 ```
 
 **Note**: For development, connect using the Tailscale IP address as localhost SSH doesn't hot reload correctly.
@@ -40,13 +43,16 @@ npm run test:ui
 - **Real-time Communication**: MQTT WebSocket via `mqtt` v5+ package
 - **HTTP API**: Axios for Python cz2 backend (POST-based API)
 - **State Management**: Local React state with hooks
-- **Testing**: Vitest with @testing-library/react
+- **Testing**: Vitest with @testing-library/react (happy-dom) and optional @vitest/ui
+- **Packaging**: Dockerfile with Nginx runtime config generator (`/config.js`)
 
 ### Key Components
 - **App.jsx**: Main component handling MQTT connection and message parsing
 - **System.jsx**: Primary UI component for thermostat controls and API interactions
 - **apiService.js**: POST-based API client for backend communication
 - **apiNormalizer.js**: Response normalization and control state logic
+- **config.js**: Layered runtime configuration combining env vars, `/config.js`,
+  and window origin fallbacks
 - **Main MQTT Topic**: `hvac/cz2` - Receives JSON thermostat data
 
 ### API Endpoints (Python cz2 Backend)
