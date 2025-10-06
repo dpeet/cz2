@@ -13,6 +13,21 @@ import {
 } from "./apiService";
 import { normalizeStatus } from "./apiNormalizer";
 
+const isTestEnv = import.meta.env.MODE === "test";
+
+// Gate noisy console output during automated tests while keeping visibility in local dev
+const logInfo = (...args) => {
+    if (!isTestEnv) {
+        console.log(...args);
+    }
+};
+
+const logError = (...args) => {
+    if (!isTestEnv) {
+        console.error(...args);
+    }
+};
+
 export default function System(props) {
     const [CZ2Status, setCZ2Status] = useState(props.status);
     const [error, setError] = useState(null);
@@ -124,12 +139,12 @@ export default function System(props) {
         setSystemModeApi(newMode)
             .then((response) => {
                 const normalized = normalizeStatus(response);
-                console.log(normalized);
+                logInfo(normalized);
                 setIsSystemModeChangeLoading(false);
             }).catch(error => {
-                console.error(error);
+                logError(error);
                 setError(`Failed to set system mode: ${error.message}`);
-                // TODO (clarify): Replace console.error with user-facing toast/banner
+                // TODO (clarify): Replace logError with user-facing toast/banner
                 setIsSystemModeChangeLoading(false);
             });
         setSystemModeSelection("");
@@ -149,7 +164,7 @@ export default function System(props) {
             setSystemFanApi(fanModeDesired)
                 .then((response) => {
                     const normalized = normalizeStatus(response);
-                    console.log(normalized);
+                    logInfo(normalized);
 
                     if (prevMode === "Auto") {
                         setSystemFanModeButtonLabel("Set Auto");
@@ -158,9 +173,9 @@ export default function System(props) {
                     }
                     setIsFanModeChangeLoading(false);
                 }).catch(error => {
-                    console.error(error);
+                    logError(error);
                     setError(`Failed to set fan mode: ${error.message}`);
-                    // TODO (clarify): Replace console.error with user-facing toast/banner
+                    // TODO (clarify): Replace logError with user-facing toast/banner
                     setIsFanModeChangeLoading(false);
                 });
 
@@ -183,7 +198,7 @@ export default function System(props) {
             setSystemModeApi(currentSystemMode, { all: allModeDesired })
                 .then((response) => {
                     const normalized = normalizeStatus(response);
-                    console.log(normalized);
+                    logInfo(normalized);
 
                     if (prevAllMode >= 1 && prevAllMode <= 8) {
                         setAllModeButtonLabel("Set On");
@@ -192,9 +207,9 @@ export default function System(props) {
                     }
                     setIsAllModeChangeLoading(false);
                 }).catch(error => {
-                    console.error(error);
+                    logError(error);
                     setError(`Failed to set all mode: ${error.message}`);
-                    // TODO (clarify): Replace console.error with user-facing toast/banner
+                    // TODO (clarify): Replace logError with user-facing toast/banner
                     setIsAllModeChangeLoading(false);
                 });
 
@@ -221,7 +236,7 @@ export default function System(props) {
                 .then((responses) => {
                     // Normalize each response
                     const normalized = responses.map(r => normalizeStatus(r));
-                    console.log(normalized);
+                    logInfo(normalized);
 
                     if (holdStatusDesired) {
                         // Hold enabled
@@ -239,9 +254,9 @@ export default function System(props) {
 
                     setIsHoldStatusChangeLoading(false);
                 }).catch(error => {
-                    console.error("Failed to set hold status:", error);
+                    logError("Failed to set hold status:", error);
                     setError(`Failed to set hold status: ${error.message}`);
-                    // TODO (clarify): Replace console.error with user-facing toast/banner
+                    // TODO (clarify): Replace logError with user-facing toast/banner
                     setIsHoldStatusChangeLoading(false);
                 });
         }
@@ -278,13 +293,13 @@ export default function System(props) {
                 .then((responses) => {
                     // Normalize each response
                     const normalized = responses.map(r => normalizeStatus(r));
-                    console.log(normalized);
+                    logInfo(normalized);
                     setIsTempChangeLoading(false);
                 })
                 .catch(error => {
-                    console.error(error);
+                    logError(error);
                     setError(`Failed to set temperature: ${error.message}`);
-                    // TODO (clarify): Replace console.error with user-facing toast/banner
+                    // TODO (clarify): Replace logError with user-facing toast/banner
                     setIsTempChangeLoading(false);
                 });
         } else {
@@ -296,12 +311,12 @@ export default function System(props) {
             })
                 .then((response) => {
                     const normalized = normalizeStatus(response);
-                    console.log(normalized);
+                    logInfo(normalized);
                     setIsTempChangeLoading(false);
                 }).catch(error => {
-                    console.error(error);
+                    logError(error);
                     setError(`Failed to set temperature: ${error.message}`);
-                    // TODO (clarify): Replace console.error with user-facing toast/banner
+                    // TODO (clarify): Replace logError with user-facing toast/banner
                     setIsTempChangeLoading(false);
                 });
         }
