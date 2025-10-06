@@ -29,56 +29,49 @@ This project is a complete rewrite of the original Perl `cz2` script, addressing
     cd pycz2
     ```
 
-2.  **Create a virtual environment:**
+2.  **Install dependencies with uv:**
     ```bash
-    uv venv
-    source .venv/bin/activate
-    ```
+    # Sync dependencies from lockfile (recommended for production)
+    uv sync --frozen --no-dev
 
-3.  **Install dependencies:**
-    ```bash
+    # OR: Install in editable mode for development
     uv pip install -e .
     ```
-    This installs the project in editable mode.
+
+    **Note:** This project uses `uv` for fast, reliable dependency management.
+    The `uv sync` command respects the lockfile and is preferred over `pip`.
+    Use `--no-dev` to skip development dependencies in production environments.
 
 ## Configuration
 
-Configuration is handled via an `.env` file. Copy the example file and edit it to match your setup.
+Configuration is handled via an `.env` file in the project root. All settings
+have sensible defaults for local development; you only need to customize
+connection and MQTT broker details for your specific environment.
 
 1.  **Copy the example file:**
     ```bash
     cp .env.example .env
     ```
 
-2.  **Edit `.env`:**
+2.  **Edit `.env` with your settings:**
 
-    ```dotenv
-    # Connection string: host:port for TCP or /dev/ttyS0 for serial
-    CZ_CONNECT="10.0.1.20:8899"
+    The `.env.example` file documents all available configuration options with
+    inline comments. Key settings to review:
 
-    # Number of zones in your system (1-8)
-    CZ_ZONES=4
+    - **`CZ_CONNECT`**: HVAC connection string (`host:port` or `/dev/ttyUSB0`)
+    - **`CZ_ZONES`**: Number of zones in your system (1-8)
+    - **`CZ_ZONE_NAMES`**: Optional comma-separated zone names
+    - **`MQTT_ENABLED`**: Set to `true` to enable MQTT publishing
+    - **`MQTT_HOST`** / **`MQTT_PORT`**: Your MQTT broker address
+    - **`CACHE_REFRESH_INTERVAL`**: Background polling interval (seconds)
+    - **`ENABLE_SSE`**: Enable Server-Sent Events for real-time updates
 
-    # Optional: List of zone names (comma-separated)
-    CZ_ZONE_NAMES="Main Room,Upstairs Bedroom,Downstairs,Unused"
+    **MQTT Requirements:** If you enable MQTT (`MQTT_ENABLED=true`), ensure
+    your broker is reachable at the specified `MQTT_HOST` and `MQTT_PORT`.
+    Authentication (`MQTT_USER`, `MQTT_PASSWORD`) is optional and depends on
+    your broker configuration.
 
-    # Optional: Device ID for the script on the serial bus (must be unique)
-    CZ_ID=99
-
-    # --- MQTT Settings (Optional) ---
-    MQTT_HOST="your_mqtt_broker_ip"
-    MQTT_PORT=1883
-    MQTT_USER=""
-    MQTT_PASSWORD=""
-    # Base topic for publishing status data
-    MQTT_TOPIC_PREFIX="hvac/cz2"
-    # How often to publish status to MQTT (in seconds)
-    MQTT_PUBLISH_INTERVAL=60
-
-    # --- API Server Settings ---
-    API_HOST="0.0.0.0"
-    API_PORT=8000
-    ```
+    See `.env.example` for complete documentation of all available settings.
 
 ## Development Setup
 
@@ -135,19 +128,37 @@ The application can be run as a CLI or as a web server.
 To run the FastAPI server and the background MQTT publisher, use the `api` command:
 
 ```bash
+# Using the pycz2 CLI wrapper
 pycz2 api
+
+# OR: Run directly with uvicorn via uv
+uv run uvicorn pycz2.api:app --host 0.0.0.0 --port 8000
 ```
 
-The API will be available at `http://<your_ip>:8000`. Interactive documentation (Swagger UI) is available at `http://<your_ip>:8000/docs`.
+The API will be available at `http://<your_ip>:8000`. Interactive documentation
+(Swagger UI) is available at `http://<your_ip>:8000/docs`.
+
+**Note:** The `uv run` command automatically manages the virtual environment and
+executes commands in the correct context, eliminating the need for manual
+activation.
 
 #### API Endpoints
 
--   `GET /status`: Get the current HVAC status.
--   `POST /update`: Force a refresh of the HVAC status and publish to MQTT.
--   `POST /system/mode`: Set the system mode (`heat`, `cool`, `auto`, `eheat`, `off`).
--   `POST /system/fan`: Set the system fan mode (`auto`, `on`).
--   `POST /zones/{zone_id}/temperature`: Set a zone's temperature setpoints.
--   ... and more! Check the `/docs` page for a full list.
+**Status Queries:**
+-   `GET /status`: Get the current HVAC status (supports `?flat=1` for legacy format)
+-   `GET /health`: Service health check
+
+**Command API:**
+-   `POST /update`: Force a refresh of the HVAC status and publish to MQTT
+-   `POST /system/mode`: Set the system mode (`Heat`, `Cool`, `Auto`, `EHeat`, `Off`)
+-   `POST /system/fan`: Set the system fan mode (`Auto`, `On`)
+-   `POST /zones/{zone_id}/temperature`: Set a zone's temperature setpoints
+-   `POST /zones/{zone_id}/hold`: Set or release hold/temporary status for a zone
+
+📘 **[View Complete Command API Documentation](docs/API_COMMANDS.md)** for detailed
+request/response schemas, validation rules, and usage examples.
+
+Check the interactive `/docs` page (Swagger UI) for a full endpoint reference.
 
 ### Command-Line Interface (CLI)
 
@@ -168,4 +179,11 @@ pycz2 cli set-system --mode auto
 
 # Monitor all raw bus traffic
 pycz2 cli monitor
+```
+
+**Using `uv run`:** All CLI commands can also be invoked via `uv run`:
+
+```bash
+uv run pycz2 cli status
+uv run pycz2 cli set-zone 1 --heat 68 --temp
 ```

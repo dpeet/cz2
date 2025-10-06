@@ -4,96 +4,78 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-cz2 is a Perl-based command-line interface for monitoring and controlling Carrier ComfortZone II HVAC systems via RS-485 serial communication. The project reads and writes data frames to/from the HVAC control panel using a custom binary protocol.
+`cz2` is the Python backend for the Mountain House Thermostat project. It
+provides a FastAPI service, CLI utilities, and MQTT integration for Carrier
+ComfortZone II systems. HVAC communication is handled via RS-485 (typically
+bridged over TCP) using asynchronous clients and a caching layer.
 
 ## Architecture
 
-### Core Components
-
-1. **Main Script (`cz2`)**: Command-line interface providing high-level commands (status, set_zone, set_system) and low-level commands (read, write, monitor)
-
-2. **Perl Modules**:
-   - `Carrier::ComfortZoneII::Interface` - Handles serial/network connections, frame I/O, and protocol implementation
-   - `Carrier::ComfortZoneII::FrameParser` - Binary frame parsing using Data::ParseBinary
-
-3. **Helper Script (`czdiff`)**: Utility for reverse-engineering protocol changes by comparing frame dumps
-
-### Communication Protocol
-
-- 9600 baud, 8N1 serial parameters
-- Binary frame format with CRC-16 checksums
-- Master controller at address 1, panel at address 9
-- Tables contain rows of data (e.g., table 1 row 16 contains zone setpoints)
-
-### Key Data Locations
-
-- **System Mode**: Table 1, Row 12, Byte 4
-- **Zone Setpoints**: Table 1, Row 16 (cooling bytes 3-10, heating bytes 11-18)
-- **Zone Temperatures**: Table 1, Row 24, Bytes 3-10
-- **System Time**: Table 1, Row 18
-- **Panel Status**: Table 9, Rows 3-5
+- **FastAPI server** (`src/pycz2/api.py`): REST endpoints for system/zone
+   control and the `/status?flat=1` parity response consumed by the frontend and
+   MQTT subscribers.
+- **HVAC service** (`src/pycz2/hvac_service.py`): Orchestrates cache refreshes,
+   command execution, and metadata (staleness, control disable reasons).
+- **MQTT publisher** (`src/pycz2/mqtt.py`): Uses `aiomqtt` with an async context
+   manager to publish snapshots to `hvac/cz2`.
+- **CLI entrypoints** (`src/pycz2/cli.py`): Operational tooling for status
+   checks, zone adjustments, and monitoring during troubleshooting.
+- **Core protocol modules** (`src/pycz2/core/`): Frame encoding/decoding,
+   transport abstractions, and typed models.
 
 ## Common Development Commands
 
 ```bash
-# Run status check
-./cz2 status
+cd cz2
 
-# Monitor all serial bus traffic
-./cz2 monitor
+# Install dependencies into .venv using uv
+uv sync --frozen
 
-# Read specific data (destination, table, row)
-./cz2 read 1 1 16
+# Run FastAPI server
+uv run pycz2 api
 
-# Set zone temperature (zone 1, heat to 68°F, temporary mode)
-./cz2 set_zone 1 heat=68 temp=on
+# CLI helpers
+uv run pycz2 cli status
+uv run pycz2 cli set-zone 1 --heat 68 --temp
+uv run pycz2 cli monitor
 
-# Set system mode to auto
-./cz2 set_system mode=auto
-
-# Dump all known data
-./cz2 read_all
-
-# Compare frame dumps for reverse engineering
-./czdiff before1 before2 before3 . after1 after2
+# Tests & quality gates
+uv run pytest
+uv run ruff check .
+uv run mypy src/
+uv run pyright src/
+uv run pylint src/ --errors-only
 ```
 
 ## Configuration
 
-The script reads configuration from `$HOME/.cz2` or path specified in `CZ2_CONFIG` environment variable:
+Environment variables (see `.env.example`) control connectivity:
 
+```env
+CZ_CONNECT=10.0.1.20:8899      # TCP bridge to HVAC (or /dev/ttyUSB0)
+CZ_ZONES=4                     # Number of zones
+MQTT_ENABLED=true              # Enable MQTT publisher
+MQTT_HOST=host.docker.internal # External broker hostname/IP
+MQTT_PORT=1883
+MQTT_TOPIC_PREFIX=hvac/cz2
+MQTT_PUBLISH_INTERVAL=60
+ENABLE_CACHE=true              # Serve cached data when HVAC offline
+API_HOST=0.0.0.0
+API_PORT=8000
 ```
-connect = hostname:port  # For TCP connection
-# OR
-connect = /dev/ttyUSB0   # For serial connection
 
-zones = 4                # Number of zones
-# OR  
-zones = Living Room, Bedroom, Office, Basement  # Zone names
+## Tests
 
-id = 99                  # Device ID on serial bus (optional)
-```
+- `uv run pytest` (full suite) – includes parity checks in
+   `tests/api/test_status_flat.py`.
+- Targeted tests can be run via `uv run pytest tests/api/test_status_flat.py`
+   when adjusting response serialization.
 
-## Critical Known Issues
+## Known Follow-ups
 
-1. **Missing Module Terminator**: `lib/Carrier/ComfortZoneII/Interface.pm` is missing the required `1;` at end of file
-2. **Hardcoded Config Path**: Line 17 in `cz2` has hardcoded path instead of using `$ENV{HOME}`
-3. **Temperature Decoding Bug**: Negative temperature logic in Interface.pm:302 uses wrong comparison
-4. **No Input Validation**: Connection strings and file paths are not validated
-
-## Potential Python Rewrite
-
-A comprehensive Python rewrite plan exists in `potential_python_rewrite.md` that addresses all known issues and adds:
-- FastAPI web interface
-- MQTT integration  
-- Async I/O with proper error handling
-- Pydantic models for data validation
-- Modern project structure with `uv` dependency management
-
-## Testing
-
-Currently no automated tests. Manual testing procedure:
-1. Use `cz2 monitor` to verify serial communication
-2. Use `cz2 status` to check data parsing
-3. Test zone control with `set_zone` commands
-4. Use `czdiff` to verify protocol changes when adding features
+- Worker remains disabled (CLI/cron style operation). Re-enabling background
+   polling will require careful cache+scheduler updates.
+- SSE endpoint exists but is not yet part of the production flow; integration
+   will follow once MQTT usage is battle-tested.
+- Additional integration tests for command workflows (fan, temperature) are
+   planned after manual validation.
