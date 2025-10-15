@@ -108,42 +108,51 @@ class HVACService:
         cache = await get_cache()
 
         try:
-            async with self._op_lock:
-                # Use connection context manager for automatic cleanup
-                async with client.connection():
-                    # Execute the requested operation
-                    if operation == "set_system_mode":
-                        mode = kwargs.get("mode")
-                        all_zones = kwargs.get("all_zones", None)
-                        await client.set_system_mode(
-                            mode=mode,
-                            all_zones_mode=all_zones,
-                        )
+            # Wrap entire operation in timeout to prevent indefinite hangs
+            async def _execute_with_lock():
+                async with self._op_lock:
+                    # Use connection context manager for automatic cleanup
+                    async with client.connection():
+                        # Execute the requested operation
+                        if operation == "set_system_mode":
+                            mode = kwargs.get("mode")
+                            all_zones = kwargs.get("all_zones", None)
+                            await client.set_system_mode(
+                                mode=mode,
+                                all_zones_mode=all_zones,
+                            )
 
-                    elif operation == "set_fan_mode":
-                        fan_mode = kwargs["fan_mode"]
-                        await client.set_fan_mode(fan_mode)
+                        elif operation == "set_fan_mode":
+                            fan_mode = kwargs["fan_mode"]
+                            await client.set_fan_mode(fan_mode)
 
-                    elif operation == "set_zone_setpoints":
-                        zones = kwargs["zones"]
-                        setpoint_kwargs: dict[str, Any] = {"zones": zones}
-                        for key in (
-                            "heat_setpoint",
-                            "cool_setpoint",
-                            "temporary_hold",
-                            "hold",
-                            "out_mode",
-                        ):
-                            value = kwargs.get(key)
-                            if value is not None:
-                                setpoint_kwargs[key] = value
-                        await client.set_zone_setpoints(**setpoint_kwargs)
-                    else:
-                        raise ValueError(f"Unknown operation: {operation}")
+                        elif operation == "set_zone_setpoints":
+                            zones = kwargs["zones"]
+                            setpoint_kwargs: dict[str, Any] = {"zones": zones}
+                            for key in (
+                                "heat_setpoint",
+                                "cool_setpoint",
+                                "temporary_hold",
+                                "hold",
+                                "out_mode",
+                            ):
+                                value = kwargs.get(key)
+                                if value is not None:
+                                    setpoint_kwargs[key] = value
+                            await client.set_zone_setpoints(**setpoint_kwargs)
+                        else:
+                            raise ValueError(f"Unknown operation: {operation}")
 
-                    # Always fetch fresh status after a write operation
-                    log.debug("Fetching fresh status after command")
-                    status = await client.get_status_data()
+                        # Always fetch fresh status after a write operation
+                        log.debug("Fetching fresh status after command")
+                        status = await client.get_status_data()
+                        return status
+
+            # Execute with timeout protection
+            status = await asyncio.wait_for(
+                _execute_with_lock(),
+                timeout=settings.COMMAND_TIMEOUT_SECONDS
+            )
 
             # Update cache with fresh data
             await cache.update(status, source="command")
@@ -154,6 +163,15 @@ class HVACService:
             log.info(f"Command {operation} completed successfully")
             return status
 
+        except asyncio.TimeoutError:
+            error_msg = (
+                f"HVAC operation timed out after {settings.COMMAND_TIMEOUT_SECONDS} seconds. "
+                "The HVAC controller may be unresponsive or experiencing heavy bus contention."
+            )
+            log.error(error_msg)
+            # Update cache to reflect error state
+            await cache.update(None, source="error", error=error_msg)
+            raise TimeoutError(error_msg)
         except Exception as e:
             log.error(f"Command execution failed: {e}")
             # Update cache to reflect error state
