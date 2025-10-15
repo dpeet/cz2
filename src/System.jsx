@@ -31,6 +31,31 @@ const logError = (...args) => {
     }
 };
 
+/**
+ * Extract a user-friendly error message from various error types
+ * @param {Error} error - The error object from axios or other sources
+ * @returns {string} A descriptive error message
+ */
+const getErrorMessage = (error) => {
+    // Backend error with detail message (HTTPException)
+    if (error.response?.data?.detail) {
+        return error.response.data.detail;
+    }
+
+    // Axios timeout error - make it more user-friendly
+    if (error.code === 'ECONNABORTED') {
+        return 'Request timed out - the operation took too long to complete';
+    }
+
+    // Network/connection errors
+    if (error.code === 'ERR_NETWORK') {
+        return 'Network error - cannot reach the API server';
+    }
+
+    // Fall back to the generic error message
+    return error.message || 'An unknown error occurred';
+};
+
 export default function System(props) {
     const [CZ2Status, setCZ2Status] = useState(props.status);
     const [zone1temp, setZone1Temp] = useState(null);
@@ -153,7 +178,7 @@ export default function System(props) {
             }).catch(error => {
                 logError(error);
                 toast.error("Failed to set system mode", {
-                    description: error.message
+                    description: getErrorMessage(error)
                 });
                 setIsSystemModeChangeLoading(false);
             });
@@ -195,7 +220,7 @@ export default function System(props) {
                 }).catch(error => {
                     logError(error);
                     toast.error("Failed to set fan mode", {
-                        description: error.message
+                        description: getErrorMessage(error)
                     });
                     setIsFanModeChangeLoading(false);
                 });
@@ -239,7 +264,7 @@ export default function System(props) {
                 }).catch(error => {
                     logError(error);
                     toast.error("Failed to set all mode", {
-                        description: error.message
+                        description: getErrorMessage(error)
                     });
                     setIsAllModeChangeLoading(false);
                 });
@@ -294,7 +319,7 @@ export default function System(props) {
                 }).catch(error => {
                     logError("Failed to set hold status:", error);
                     toast.error("Failed to set hold status", {
-                        description: error.message
+                        description: getErrorMessage(error)
                     });
                     setIsHoldStatusChangeLoading(false);
                 });
@@ -346,7 +371,7 @@ export default function System(props) {
                 .catch(error => {
                     logError(error);
                     toast.error("Failed to set temperature", {
-                        description: error.message
+                        description: getErrorMessage(error)
                     });
                     setIsTempChangeLoading(false);
                 });
@@ -372,7 +397,7 @@ export default function System(props) {
                 }).catch(error => {
                     logError(error);
                     toast.error("Failed to set temperature", {
-                        description: error.message
+                        description: getErrorMessage(error)
                     });
                     setIsTempChangeLoading(false);
                 });
@@ -384,7 +409,7 @@ export default function System(props) {
     }
 
     return (
-        <TooltipProvider>
+        <TooltipProvider delayDuration={200}>
         <div className="app">
             <div className="thermostats">
                 <div className='main'>
