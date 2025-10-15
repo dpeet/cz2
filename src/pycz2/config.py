@@ -1,5 +1,6 @@
 # src/pycz2/config.py
 import logging.config
+from pathlib import Path
 
 from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -52,6 +53,7 @@ class Settings(BaseSettings):
     # Command Queue Settings
     COMMAND_QUEUE_MAX_SIZE: int = Field(default=100, ge=10)
     COMMAND_TIMEOUT_SECONDS: int = Field(default=30, ge=5)
+    LOG_FILE_PATH: str = "~/.cache/pycz2/pycz2.log"
 
     @field_validator("CZ_ZONE_NAMES", mode="before")
     @classmethod
@@ -74,6 +76,9 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+LOG_FILE_PATH = Path(settings.LOG_FILE_PATH).expanduser()
+LOG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 # Basic logging configuration
 LOGGING_CONFIG = {
     "version": 1,
@@ -91,12 +96,20 @@ LOGGING_CONFIG = {
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stderr",
         },
+        "file": {
+            "formatter": "default",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(LOG_FILE_PATH),
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 3,
+            "encoding": "utf-8",
+        },
     },
     "loggers": {
-        "pycz2": {"handlers": ["default"], "level": "INFO"},
-        "uvicorn.error": {"level": "INFO"},
+        "pycz2": {"handlers": ["default", "file"], "level": "INFO"},
+        "uvicorn.error": {"handlers": ["default", "file"], "level": "INFO"},
         "uvicorn.access": {
-            "handlers": ["default"],
+            "handlers": ["default", "file"],
             "level": "INFO",
             "propagate": False,
         },
