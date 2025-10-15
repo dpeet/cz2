@@ -9,7 +9,7 @@ import { resolveConfig } from "./config";
 // Get base URL from environment or fallback to window.location.origin
 const getBaseUrl = () => resolveConfig().apiBaseUrl;
 
-// Get API timeout from environment with fallback to 5000ms
+// Get API timeout from environment (configured via .env files)
 const getTimeout = () => resolveConfig().apiTimeoutMs;
 
 // Lazy-initialized axios instance to support testing
