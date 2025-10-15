@@ -622,9 +622,8 @@ export default function System(props) {
                             <label>Target Temperature:</label>
                             <input type="number" min="45" max="80" value={targetTemperatureSelection} onChange={handleTargetTemperatureChange} required />
                         </div>
-                        <button className="temp" type="submit" disabled={isTempChangeLoading}>
-                            {isTempChangeLoading ? "Loading..." : "Submit"}
-                        </button>
+                        {isTempChangeLoading && <button className="temp_disabled" type="submit" disabled><CircleLoader size={16} /> Loading...</button>}
+                        {!isTempChangeLoading && <button className="temp" type="submit">Submit</button>}
                     </form>
                 </div>
 
