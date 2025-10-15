@@ -82,6 +82,7 @@ export default function System(props) {
     const [isAllModeChangeLoading, setIsAllModeChangeLoading] = useState(false);
     const [isHoldStatusChangeLoading, setIsHoldStatusChangeLoading] = useState(false);
     const [allHoldStatusButtonLabel, setAllHoldStatusButtonLabel] = useState("Set Hold On");
+    const [singleZoneHoldButtonLabel, setSingleZoneHoldButtonLabel] = useState("Set Hold On");
     const [systemMode, setSystemMode] = useState("Unknown");
     const [systemModeSelection, setSystemModeSelection] = useState("");
     const [systemFanMode, setSystemFanMode] = useState("Unknown");
@@ -143,6 +144,28 @@ export default function System(props) {
             }
         }
     }, [props.status]);
+
+    // Helper function to get hold status for currently selected zone
+    const getSelectedZoneHold = () => {
+        switch(zoneSelection) {
+            case "1": return zone1Hold;
+            case "2": return zone2Hold;
+            case "3": return zone3Hold;
+            default: return null;
+        }
+    };
+
+    // Update single zone hold button label when zone selection or hold status changes
+    useEffect(() => {
+        if (!allMode && zoneSelection && zoneSelection !== "" && zoneSelection !== "all") {
+            const zoneHold = getSelectedZoneHold();
+            if (zoneHold >= 1) {
+                setSingleZoneHoldButtonLabel("Set Hold Off");
+            } else if (zoneHold === 0) {
+                setSingleZoneHoldButtonLabel("Set Hold On");
+            }
+        }
+    }, [zoneSelection, zone1Hold, zone2Hold, zone3Hold, allMode]);
 
     const handleTempZoneChange = (event) => {
         setZoneSelection(event.target.value);
@@ -324,6 +347,68 @@ export default function System(props) {
                     setIsHoldStatusChangeLoading(false);
                 });
         }
+    }
+
+    const handleSingleZoneHoldStatusChange = (event) => {
+        event.preventDefault();
+
+        // Validate zone selection
+        if (!zoneSelection || zoneSelection === "" || zoneSelection === "all") {
+            toast.error("Invalid zone selection", {
+                description: "Please select a specific zone (1, 2, or 3)"
+            });
+            return;
+        }
+
+        setIsHoldStatusChangeLoading(true);
+
+        // Determine desired hold state for selected zone
+        const zoneHold = getSelectedZoneHold();
+        const holdStatusDesired = (zoneHold >= 1) ? false : true;
+
+        // Immediate feedback
+        toast.info("Command sent to HVAC", {
+            description: `${holdStatusDesired ? "Enabling" : "Disabling"} hold for zone ${zoneSelection}`
+        });
+
+        // Extract actual status from normalized object
+        const statusData = CZ2Status.status || CZ2Status;
+
+        // Use POST API service: setZoneHold(zoneId, hold, cachedStatus)
+        setZoneHold(zoneSelection, holdStatusDesired, statusData)
+            .then((response) => {
+                const normalized = normalizeStatus(response);
+                logInfo(normalized);
+
+                // Update specific zone's hold state
+                const newHoldValue = holdStatusDesired ? (allMode || 1) : 0;
+                switch(zoneSelection) {
+                    case "1":
+                        setZone1Hold(newHoldValue);
+                        break;
+                    case "2":
+                        setZone2Hold(newHoldValue);
+                        break;
+                    case "3":
+                        setZone3Hold(newHoldValue);
+                        break;
+                }
+
+                // Update button label
+                setSingleZoneHoldButtonLabel(holdStatusDesired ? "Set Hold Off" : "Set Hold On");
+
+                toast.success("Hold status updated", {
+                    description: `Hold ${holdStatusDesired ? "enabled" : "disabled"} for zone ${zoneSelection}`
+                });
+                setIsHoldStatusChangeLoading(false);
+            })
+            .catch(error => {
+                logError("Failed to set hold status:", error);
+                toast.error("Failed to set hold status", {
+                    description: getErrorMessage(error)
+                });
+                setIsHoldStatusChangeLoading(false);
+            });
     }
 
     const handleTempChangeSubmit = (event) => {
@@ -575,6 +660,7 @@ export default function System(props) {
                     </h2>
                     <form className='hold-form'>
                         {allMode ?
+                        // ALL MODE ON: Control all zones together
                         <div>
                             <div className="form-group">
                                 {zone1Hold >= 1 || zone2Hold >= 1 || zone3Hold >= 1 ? <h2>On</h2> : <h2>Off</h2>}
@@ -586,15 +672,37 @@ export default function System(props) {
                             </div>
                         </div>
                         :
-                        <div className="form-group">
-                            <label>Zone</label>
-                            <select value={zoneSelection} onChange={handleTempZoneChange} required>
-                                <option value="">Select Zone</option>
-                                <option value="all">All</option>
-                                <option value="1">1</option>
-                                <option value="2">2</option>
-                                <option value="3">3</option>
-                            </select>
+                        // ALL MODE OFF: Control individual zones
+                        <div>
+                            <div className="form-group">
+                                <label>Zone</label>
+                                <select value={zoneSelection} onChange={handleTempZoneChange} required>
+                                    <option value="">Select Zone</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                </select>
+                            </div>
+                            {/* Only show hold controls when a specific zone is selected */}
+                            {zoneSelection && zoneSelection !== "" && zoneSelection !== "all" && (
+                                <>
+                                    <div className="form-group">
+                                        {getSelectedZoneHold() >= 1 ? <h2>On</h2> : <h2>Off</h2>}
+                                    </div>
+                                    <div className='form-group'>
+                                        {isHoldStatusChangeLoading && (
+                                            <button className="system_disabled" type="submit" disabled>
+                                                <CircleLoader size={16} /> Loading...
+                                            </button>
+                                        )}
+                                        {!isHoldStatusChangeLoading && (
+                                            <button className="system" type="submit" onClick={handleSingleZoneHoldStatusChange}>
+                                                {singleZoneHoldButtonLabel}
+                                            </button>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                         </div>}
                     </form>
                 </div>
