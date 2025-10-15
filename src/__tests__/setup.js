@@ -11,12 +11,12 @@ afterEach(() => {
   cleanup();
 });
 
-// Mock environment variables
+// Mock environment variables (loaded from vite.config.js test.env)
 global.import = {
   meta: {
     env: {
-      VITE_API_BASE_URL: 'http://localhost:8000',
-      VITE_API_TIMEOUT_MS: '5000',
+      VITE_API_BASE_URL: process.env.VITE_API_BASE_URL,
+      VITE_API_TIMEOUT_MS: process.env.VITE_API_TIMEOUT_MS,
     }
   }
 };

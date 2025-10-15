@@ -77,9 +77,9 @@ describe('API Service - Environment Configuration', () => {
     );
   });
 
-  it('should use VITE_API_TIMEOUT_MS with fallback to 5000ms', async () => {
-    // Test that timeout is sourced from env with sane fallback
-    // Expected: timeout = 5000ms when VITE_API_TIMEOUT_MS is set to "5000"
+  it('should use VITE_API_TIMEOUT_MS from environment', async () => {
+    // Test that timeout is sourced from configured env value
+    // Expected: timeout matches configured VITE_API_TIMEOUT_MS value
     const mockCreate = vi.fn().mockReturnValue({
       post: vi.fn().mockResolvedValue({ data: {} }),
     });
@@ -90,7 +90,7 @@ describe('API Service - Environment Configuration', () => {
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        timeout: 5000,
+        timeout: Number(process.env.VITE_API_TIMEOUT_MS),
       })
     );
   });
