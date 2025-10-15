@@ -72,7 +72,7 @@ Configuration via `.env` files (Vite auto-loads based on mode):
 Required variables:
 - `VITE_API_BASE_URL` - Backend API URL
 - `VITE_MQTT_WS_URL` - MQTT WebSocket URL
-- `VITE_API_TIMEOUT_MS` - API timeout (default: 5000ms)
+- `VITE_API_TIMEOUT_MS` - API timeout (configured in .env files: 35000ms)
 
 ## Migration Status
 

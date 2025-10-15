@@ -37,7 +37,7 @@ Updated all HVAC commands to use POST API:
 ### 4. Environment Configuration ✓
 Created `.env.example` documenting all configuration variables:
 - `VITE_API_BASE_URL` - Python cz2 API endpoint (default: window.location.origin)
-- `VITE_API_TIMEOUT_MS` - API request timeout (default: 5000ms)
+- `VITE_API_TIMEOUT_MS` - API request timeout (see .env files for configured value)
 - `VITE_MQTT_WS_URL` - MQTT broker WebSocket URL (default: wss://mqtt.mtnhouse.casa)
 
 ### 5. Testing Infrastructure ✓

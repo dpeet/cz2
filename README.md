@@ -26,7 +26,7 @@ cp .env.example .env.local
 **Required Environment Variables:**
 - `VITE_API_BASE_URL` - Backend API URL (e.g., `http://localhost:8000`)
 - `VITE_MQTT_WS_URL` - MQTT WebSocket URL (e.g., `ws://localhost:9001`)
-- `VITE_API_TIMEOUT_MS` - API timeout in milliseconds (default: `5000`)
+- `VITE_API_TIMEOUT_MS` - API timeout in milliseconds (see .env files)
 
 See `.env.example` for development and production configurations.
 
