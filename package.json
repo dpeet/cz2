@@ -11,24 +11,27 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
-    "axios": "^1.6.8",
-    "classnames": "^2.3.2",
-    "mqtt": "^5.5.3",
+    "@radix-ui/react-tooltip": "^1.2.8",
+    "axios": "^1.12.2",
+    "classnames": "^2.5.1",
+    "lucide-react": "^0.545.0",
+    "mqtt": "^5.14.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-spinners": "^0.13.8",
-    "sass": "^1.58.1",
-    "typescript": "^4.9.5",
-    "vite": "^5"
+    "react-spinners": "^0.17.0",
+    "sass": "^1.93.2",
+    "sonner": "^2.0.7",
+    "typescript": "^5.9.3",
+    "vite": "^7"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.10",
-    "@vitejs/plugin-react": "^4.2.1",
+    "@vitejs/plugin-react": "^5.0.4",
     "@vitest/ui": "^3.2.4",
-    "happy-dom": "^19.0.2",
+    "happy-dom": "^20.0.1",
     "vitest": "^3.2.4"
   }
 }

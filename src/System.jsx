@@ -3,6 +3,7 @@ import "./App.scss";
 import { useEffect, useState } from "react";
 
 import CircleLoader from "react-spinners/CircleLoader";
+import { toast } from "sonner";
 import Thermostat from "./thermostat";
 import {
   systemMode as setSystemModeApi,
@@ -12,6 +13,8 @@ import {
   requestUpdate as requestUpdateApi
 } from "./apiService";
 import { normalizeStatus } from "./apiNormalizer";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./components/ui/tooltip";
+import { tooltipContent } from "./tooltipContent";
 
 const isTestEnv = import.meta.env.MODE === "test";
 
@@ -30,7 +33,6 @@ const logError = (...args) => {
 
 export default function System(props) {
     const [CZ2Status, setCZ2Status] = useState(props.status);
-    const [error, setError] = useState(null);
     const [zone1temp, setZone1Temp] = useState(null);
     const [zone1Humidity, setZone1Humidity] = useState(null);
     const [zone1CoolSetPoint, setZone1CoolSetPoint] = useState(null);
@@ -133,18 +135,26 @@ export default function System(props) {
         const newMode = event.target.value;
         setSystemModeSelection(newMode);
         setIsSystemModeChangeLoading(true);
-        setError(null);
+
+        // Immediate feedback
+        toast.info("Command sent to HVAC", {
+            description: `Setting mode to ${newMode}`
+        });
 
         // Use new POST API service (see apiService.js)
         setSystemModeApi(newMode)
             .then((response) => {
                 const normalized = normalizeStatus(response);
                 logInfo(normalized);
+                toast.success("System mode updated", {
+                    description: `Mode changed to ${newMode}`
+                });
                 setIsSystemModeChangeLoading(false);
             }).catch(error => {
                 logError(error);
-                setError(`Failed to set system mode: ${error.message}`);
-                // TODO (clarify): Replace logError with user-facing toast/banner
+                toast.error("Failed to set system mode", {
+                    description: error.message
+                });
                 setIsSystemModeChangeLoading(false);
             });
         setSystemModeSelection("");
@@ -154,7 +164,14 @@ export default function System(props) {
         // TODO this should really be a better toggle, but it's manually setting everything now
         // ie buttonlabel should update automatically, not be set everywhere
         setIsFanModeChangeLoading(true);
-        setError(null);
+
+        // Immediate feedback
+        const fanModeDesired = systemFanMode === "Auto" ? "On" : "Auto";
+        const fanModeLabel = fanModeDesired === "On" ? "Always On" : "Auto";
+
+        toast.info("Command sent to HVAC", {
+            description: `Setting fan to ${fanModeLabel}`
+        });
 
         // Map frontend labels to backend API values (functional update)
         setSystemFanMode(prevMode => {
@@ -171,11 +188,15 @@ export default function System(props) {
                     } else if (prevMode === "Always On") {
                         setSystemFanModeButtonLabel("Set Always On");
                     }
+                    toast.success("Fan mode updated", {
+                        description: `Fan mode changed to ${fanModeDesired === "On" ? "Always On" : "Auto"}`
+                    });
                     setIsFanModeChangeLoading(false);
                 }).catch(error => {
                     logError(error);
-                    setError(`Failed to set fan mode: ${error.message}`);
-                    // TODO (clarify): Replace logError with user-facing toast/banner
+                    toast.error("Failed to set fan mode", {
+                        description: error.message
+                    });
                     setIsFanModeChangeLoading(false);
                 });
 
@@ -187,7 +208,13 @@ export default function System(props) {
         // TODO this should really be a better toggle, but it's manually setting everything now
         // ie buttonlabel should update automatically, not be set everywhere
         setIsAllModeChangeLoading(true);
-        setError(null);
+
+        // Immediate feedback
+        const allModeDesired = (allMode >= 1 && allMode <= 8) ? false : true;
+
+        toast.info("Command sent to HVAC", {
+            description: `${allModeDesired ? "Enabling" : "Disabling"} all mode`
+        });
 
         // Determine desired all-mode setting (functional update)
         setAllMode(prevAllMode => {
@@ -205,11 +232,15 @@ export default function System(props) {
                     } else if (prevAllMode === 0) {
                         setAllModeButtonLabel("Set Off");
                     }
+                    toast.success("All mode updated", {
+                        description: `All mode ${allModeDesired ? "enabled" : "disabled"}`
+                    });
                     setIsAllModeChangeLoading(false);
                 }).catch(error => {
                     logError(error);
-                    setError(`Failed to set all mode: ${error.message}`);
-                    // TODO (clarify): Replace logError with user-facing toast/banner
+                    toast.error("Failed to set all mode", {
+                        description: error.message
+                    });
                     setIsAllModeChangeLoading(false);
                 });
 
@@ -220,12 +251,16 @@ export default function System(props) {
     const handleHoldStatusChange = (event) => {
         if (allMode){
             setIsHoldStatusChangeLoading(true);
-            setError(null);
 
             // Determine desired hold state (true = enable, false = disable)
             const holdStatusDesired = (zone1Hold >= 1 || zone2Hold >= 1 || zone3Hold >= 1)
               ? false
               : true;
+
+            // Immediate feedback
+            toast.info("Command sent to HVAC", {
+                description: `${holdStatusDesired ? "Enabling" : "Disabling"} hold for all zones`
+            });
 
             // Extract actual status from normalized object
             const statusData = CZ2Status.status || CZ2Status;
@@ -252,11 +287,15 @@ export default function System(props) {
                         setAllHoldStatusButtonLabel("Set Hold On");
                     }
 
+                    toast.success("Hold status updated", {
+                        description: `Hold ${holdStatusDesired ? "enabled" : "disabled"} for all zones`
+                    });
                     setIsHoldStatusChangeLoading(false);
                 }).catch(error => {
                     logError("Failed to set hold status:", error);
-                    setError(`Failed to set hold status: ${error.message}`);
-                    // TODO (clarify): Replace logError with user-facing toast/banner
+                    toast.error("Failed to set hold status", {
+                        description: error.message
+                    });
                     setIsHoldStatusChangeLoading(false);
                 });
         }
@@ -265,12 +304,12 @@ export default function System(props) {
     const handleTempChangeSubmit = (event) => {
         event.preventDefault();
         setIsTempChangeLoading(true);
-        setError(null);
 
         // Validate temperature range (45-80°F)
         if (targetTemperatureSelection < 45 || targetTemperatureSelection > 80) {
-            setError("Temperature out of range (45-80°F)");
-            // TODO (clarify): Replace with user-facing error toast/banner
+            toast.error("Temperature out of range", {
+                description: "Please enter a temperature between 45°F and 80°F"
+            });
             setIsTempChangeLoading(false);
             return;
         }
@@ -280,6 +319,11 @@ export default function System(props) {
 
         // Handle "all" zones by issuing parallel requests for each zone
         if (zoneSelection === "all" && statusData && statusData.zones) {
+            // Immediate feedback
+            toast.info("Command sent to HVAC", {
+                description: `Setting all zones to ${targetTemperatureSelection}°F (${modeSelection})`
+            });
+
             const promises = statusData.zones.map((_, index) => {
                 const zoneId = index + 1;
                 return setZoneTemperature(zoneId, {
@@ -294,15 +338,24 @@ export default function System(props) {
                     // Normalize each response
                     const normalized = responses.map(r => normalizeStatus(r));
                     logInfo(normalized);
+                    toast.success("Temperature updated", {
+                        description: `All zones set to ${targetTemperatureSelection}°F (${modeSelection})`
+                    });
                     setIsTempChangeLoading(false);
                 })
                 .catch(error => {
                     logError(error);
-                    setError(`Failed to set temperature: ${error.message}`);
-                    // TODO (clarify): Replace logError with user-facing toast/banner
+                    toast.error("Failed to set temperature", {
+                        description: error.message
+                    });
                     setIsTempChangeLoading(false);
                 });
         } else {
+            // Immediate feedback
+            toast.info("Command sent to HVAC", {
+                description: `Setting zone ${zoneSelection} to ${targetTemperatureSelection}°F (${modeSelection})`
+            });
+
             // Single zone: Use new POST API service (see apiService.js)
             setZoneTemperature(parseInt(zoneSelection), {
                 mode: modeSelection,
@@ -312,11 +365,15 @@ export default function System(props) {
                 .then((response) => {
                     const normalized = normalizeStatus(response);
                     logInfo(normalized);
+                    toast.success("Temperature updated", {
+                        description: `Zone ${zoneSelection} set to ${targetTemperatureSelection}°F (${modeSelection})`
+                    });
                     setIsTempChangeLoading(false);
                 }).catch(error => {
                     logError(error);
-                    setError(`Failed to set temperature: ${error.message}`);
-                    // TODO (clarify): Replace logError with user-facing toast/banner
+                    toast.error("Failed to set temperature", {
+                        description: error.message
+                    });
                     setIsTempChangeLoading(false);
                 });
         }
@@ -327,30 +384,8 @@ export default function System(props) {
     }
 
     return (
+        <TooltipProvider>
         <div className="app">
-            {/* TODO (clarify): Replace simple error banner with toast/notification library */}
-            {error && (
-                <div style={{
-                    backgroundColor: "#f44336",
-                    color: "white",
-                    padding: "10px",
-                    margin: "10px",
-                    borderRadius: "4px",
-                    textAlign: "center"
-                }}>
-                    {error}
-                    <button
-                        onClick={() => setError(null)}
-                        style={{
-                            marginLeft: "10px",
-                            padding: "5px 10px",
-                            cursor: "pointer"
-                        }}
-                    >
-                        Dismiss
-                    </button>
-                </div>
-            )}
             <div className="thermostats">
                 <div className='main'>
                     <Thermostat
@@ -392,7 +427,22 @@ export default function System(props) {
                 <div className='system_statuses'>
                     <div className='system_status_item'>
                         <div className='system_status_item_label'>
-                            <p>Mode</p>
+                            <p>
+                                Mode
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span style={{ marginLeft: '6px', cursor: 'help', opacity: 0.7 }}>ⓘ</span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <div>
+                                            <strong>{tooltipContent.mode.title}</strong>
+                                            <p style={{ whiteSpace: 'pre-line', marginTop: '4px' }}>
+                                                {tooltipContent.mode.description}
+                                            </p>
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </p>
                             <h2>{systemMode}</h2>
                         </div>
                         <div className="form-group">
@@ -416,7 +466,22 @@ export default function System(props) {
                     </div>
                     <div className='system_status_item'>
                         <div className='system_status_item_label'>
-                            <p>Fan</p>
+                            <p>
+                                Fan
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span style={{ marginLeft: '6px', cursor: 'help', opacity: 0.7 }}>ⓘ</span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <div>
+                                            <strong>{tooltipContent.fan.title}</strong>
+                                            <p style={{ whiteSpace: 'pre-line', marginTop: '4px' }}>
+                                                {tooltipContent.fan.description}
+                                            </p>
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </p>
                             <h2>{systemFanMode}</h2>
                         </div>
                         <div className="form-group">
@@ -432,7 +497,22 @@ export default function System(props) {
                     </div>
                     <div className='system_status_item'>
                         <div className='system_status_item_label'>
-                            <p>All Mode</p>
+                            <p>
+                                All Mode
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span style={{ marginLeft: '6px', cursor: 'help', opacity: 0.7 }}>ⓘ</span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <div>
+                                            <strong>{tooltipContent.allMode.title}</strong>
+                                            <p style={{ whiteSpace: 'pre-line', marginTop: '4px' }}>
+                                                {tooltipContent.allMode.description}
+                                            </p>
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </p>
                             {allMode >= 1 && allMode <= 8 && <h2>On</h2>}
                             {allMode == 0 && <h2>Off</h2>}
                             {allMode == null && <h2>Unknown</h2>}
@@ -452,7 +532,22 @@ export default function System(props) {
                     
                 </div>
                 <div className='hold_control'>
-                    <h2 className='change_hold'>Change Hold</h2>
+                    <h2 className='change_hold'>
+                        Change Hold
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span style={{ marginLeft: '6px', cursor: 'help', opacity: 0.7 }}>ⓘ</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <div>
+                                    <strong>{tooltipContent.hold.title}</strong>
+                                    <p style={{ whiteSpace: 'pre-line', marginTop: '4px' }}>
+                                        {tooltipContent.hold.description}
+                                    </p>
+                                </div>
+                            </TooltipContent>
+                        </Tooltip>
+                    </h2>
                     <form className='hold-form'>
                         {allMode ?
                         <div>
@@ -479,7 +574,22 @@ export default function System(props) {
                     </form>
                 </div>
                 <div className='temp_control'>
-                    <h2 className='change_temp'>Change Temperature</h2>
+                    <h2 className='change_temp'>
+                        Change Temperature
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span style={{ marginLeft: '6px', cursor: 'help', opacity: 0.7 }}>ⓘ</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <div>
+                                    <strong>{tooltipContent.temperature.title}</strong>
+                                    <p style={{ whiteSpace: 'pre-line', marginTop: '4px' }}>
+                                        {tooltipContent.temperature.description}
+                                    </p>
+                                </div>
+                            </TooltipContent>
+                        </Tooltip>
+                    </h2>
                     <form className="thermostat-form" onSubmit={handleTempChangeSubmit}>
                         {allMode ?
                             <div className="form-group">
@@ -520,5 +630,6 @@ export default function System(props) {
 
             </div>
         </div>
+        </TooltipProvider>
     )
 }
