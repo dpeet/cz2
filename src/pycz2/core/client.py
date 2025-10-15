@@ -21,7 +21,9 @@ from .constants import (
     FAN_MODE_MAP,
     MAX_MESSAGE_SIZE,
     MAX_REPLY_ATTEMPTS,
+    MAX_SEND_RETRIES,
     MIN_MESSAGE_SIZE,
+    SEND_RETRY_DELAY,
     READ_QUERIES,
     SYSTEM_MODE_MAP,
     WEEKDAY_MAP,
@@ -295,36 +297,46 @@ class ComfortZoneIIClient:
             function=function,
             data=data,
         )
-        await self._write_data(message)
-        # Give bus a moment, like legacy impl implicitly does
-        await asyncio.sleep(0.02)
 
-        for _ in range(MAX_REPLY_ATTEMPTS):  # Try to find our reply amongst crosstalk
-            reply = await self.get_frame()
-            if reply.destination != self.device_id:
-                continue
-            # Normalize function for robust comparisons (Enum or raw value)
-            rfunc = reply.function
-            try:
-                if not isinstance(rfunc, Function):
-                    # construct Enum may return raw value or str; coerce both
-                    rfunc = Function[rfunc] if isinstance(rfunc, str) else Function(rfunc)
-            except Exception:
-                pass
+        for attempt in range(1, MAX_SEND_RETRIES + 1):
+            await self._write_data(message)
+            # Give bus a moment, like legacy impl implicitly does
+            await asyncio.sleep(0.02)
 
-            if rfunc == Function.error:
-                raise OSError(f"Error reply received: {reply.data}")
-            if rfunc == Function.reply:
-                # Basic validation for read replies
-                if (
-                    function == Function.read
-                    and len(data) >= 3
-                    and len(reply.data) >= 3
-                ):
-                    if reply.data[0:3] == data[0:3]:
+            for _ in range(MAX_REPLY_ATTEMPTS):  # Try to find our reply amongst crosstalk
+                reply = await self.get_frame()
+                allowed_destinations = {self.device_id}
+                if function == Function.write:
+                    allowed_destinations.update({destination, 0})
+
+                if reply.destination not in allowed_destinations:
+                    continue
+                # Normalize function for robust comparisons (Enum or raw value)
+                rfunc = reply.function
+                try:
+                    if not isinstance(rfunc, Function):
+                        # construct Enum may return raw value or str; coerce both
+                        rfunc = Function[rfunc] if isinstance(rfunc, str) else Function(rfunc)
+                except Exception:
+                    pass
+
+                if rfunc == Function.error:
+                    raise OSError(f"Error reply received: {reply.data}")
+                if rfunc == Function.reply:
+                    # Basic validation for read replies
+                    if (
+                        function == Function.read
+                        and len(data) >= 3
+                        and len(reply.data) >= 3
+                    ):
+                        if reply.data[0:3] == data[0:3]:
+                            return reply
+                    else:  # For writes, any reply is good
                         return reply
-                else:  # For writes, any reply is good
-                    return reply
+
+            # No matching reply for this transmission; back off and retry
+            if attempt < MAX_SEND_RETRIES:
+                await asyncio.sleep(SEND_RETRY_DELAY)
 
         raise TimeoutError("No valid reply received.")
 

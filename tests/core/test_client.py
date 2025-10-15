@@ -5,7 +5,13 @@ import pytest
 from tenacity import RetryError
 
 from pycz2.core.client import ComfortZoneIIClient
-from pycz2.core.constants import FanMode, Function, SystemMode
+from pycz2.core.constants import (
+    FanMode,
+    Function,
+    MAX_REPLY_ATTEMPTS,
+    MAX_SEND_RETRIES,
+    SystemMode,
+)
 from pycz2.core.frame import build_message
 from pycz2.core.models import SystemStatus
 
@@ -209,7 +215,7 @@ class TestComfortZoneIIClient:
         row16_frame = self.create_mock_frame_data(99, 1, Function.reply, row16_data)
         
         # Mock OK replies for write operations
-        ok_reply = self.create_mock_frame_data(99, 1, Function.reply, [0])
+        ok_reply = self.create_mock_frame_data(1, 9, Function.reply, [0])
         
         # Setup mock reader to return frames in sequence
         mock_reader.read.side_effect = [row12_frame, row16_frame, ok_reply, ok_reply]
@@ -244,7 +250,7 @@ class TestComfortZoneIIClient:
         row12_frame = self.create_mock_frame_data(99, 1, Function.reply, row12_data)
         
         # Mock OK reply
-        ok_reply = self.create_mock_frame_data(99, 1, Function.reply, [0])
+        ok_reply = self.create_mock_frame_data(1, 9, Function.reply, [0])
         
         mock_reader.read.side_effect = [row12_frame, ok_reply]
         
@@ -264,7 +270,7 @@ class TestComfortZoneIIClient:
         row17_frame = self.create_mock_frame_data(99, 1, Function.reply, row17_data)
         
         # Mock OK reply
-        ok_reply = self.create_mock_frame_data(99, 1, Function.reply, [0])
+        ok_reply = self.create_mock_frame_data(1, 9, Function.reply, [0])
         
         mock_reader.read.side_effect = [row17_frame, ok_reply]
         
@@ -282,8 +288,10 @@ class TestComfortZoneIIClient:
         # Mock frame with wrong destination (should be 99, but we'll use 1)
         wrong_dest_frame = self.create_mock_frame_data(1, 1, Function.reply, [0, 1, 16, 42])
         
-        # Setup mock to return wrong destination 5 times (the retry limit)
-        mock_reader.read.side_effect = [wrong_dest_frame] * 6
+        # Setup mock to always return a reply for the wrong destination
+        mock_reader.read.side_effect = [wrong_dest_frame] * (
+            (MAX_SEND_RETRIES * MAX_REPLY_ATTEMPTS) + 5
+        )
         
         client.reader = mock_reader
         client.writer = mock_writer
@@ -291,6 +299,22 @@ class TestComfortZoneIIClient:
         # Should raise TimeoutError after retries
         with pytest.raises(TimeoutError, match="No valid reply received"):
             await client.send_with_reply(1, Function.read, [0, 1, 16])
+
+        # Ensure the client retried the full number of transmissions
+        assert mock_writer.write.call_count == MAX_SEND_RETRIES
+
+    @pytest.mark.asyncio
+    async def test_send_with_reply_allows_destination_ack(self, client, mock_reader, mock_writer):
+        """Ensure acknowledgements addressed to the destination are accepted."""
+        ack_frame = self.create_mock_frame_data(1, 9, Function.reply, [0])
+
+        mock_reader.read.side_effect = [ack_frame]
+        client.reader = mock_reader
+        client.writer = mock_writer
+
+        reply = await client.send_with_reply(1, Function.write, [0, 1, 16, 0])
+
+        assert reply.data[0] == 0
 
     @pytest.mark.asyncio
     async def test_send_with_reply_error_response(self, client, mock_reader, mock_writer):

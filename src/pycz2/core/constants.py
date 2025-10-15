@@ -67,3 +67,9 @@ assert DAMPER_DIVISOR > 0, "Damper divisor must be positive"
 
 # Maximum attempts to find a reply frame amongst bus crosstalk
 MAX_REPLY_ATTEMPTS = 5
+
+# Number of times to retransmit a request when no reply is received
+MAX_SEND_RETRIES = 5
+
+# Delay (seconds) between retransmission attempts
+SEND_RETRY_DELAY = 0.5
