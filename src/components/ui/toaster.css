@@ -1,0 +1,29 @@
+/**
+ * Toaster Component Styles
+ *
+ * Minimal styling for toast notifications to work with sonner's built-in styles
+ */
+
+.toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toast-icon-spin {
+  animation: toast-spin 1s linear infinite;
+}
+
+@keyframes toast-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Override sonner defaults to match app theme if needed */
+[data-sonner-toaster] {
+  font-family: inherit;
+}
