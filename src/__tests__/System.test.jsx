@@ -14,6 +14,16 @@ import * as apiService from '../apiService';
 // Mock the entire apiService module
 vi.mock('../apiService');
 
+// Mock sonner toast notifications
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+  },
+}));
+
 describe('System Component - API Integration', () => {
   // Mock normalized status (as returned by apiNormalizer)
   const mockStatus = {
@@ -229,6 +239,8 @@ describe('System Component - API Integration', () => {
 
   describe('Error Handling', () => {
     it('should handle API errors gracefully for system mode changes', async () => {
+      const { toast } = await import('sonner');
+
       apiService.systemMode.mockRejectedValueOnce(
         new Error('Network Error')
       );
@@ -243,6 +255,12 @@ describe('System Component - API Integration', () => {
 
       await waitFor(() => {
         expect(apiService.systemMode).toHaveBeenCalled();
+        expect(toast.error).toHaveBeenCalledWith(
+          "Failed to set system mode",
+          expect.objectContaining({
+            description: "Network Error"
+          })
+        );
       });
 
       // Component should still be rendered and functional

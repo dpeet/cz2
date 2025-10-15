@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import System from "./System";
 import mqtt from "mqtt";
+import { toast } from "sonner";
 import CONFIG from "./config";
 import { normalizeStatus } from "./apiNormalizer";
 
@@ -15,6 +16,11 @@ export default function App() {
   const [display, setDisplay] = useState(false);
   const reconnectTimer = useRef(null);
   const clientRef = useRef(null);
+
+  // Connection state tracking for toast notifications
+  const hasConnectedOnce = useRef(false);
+  const lastDisconnectToast = useRef(0);
+  const connectionToastShown = useRef(false);
 
   useEffect(() => {
     // Resolve MQTT WebSocket URL with safe fallbacks
@@ -37,6 +43,21 @@ export default function App() {
       // Subscribe to all CZ2 topics (covers legacy and new forms)
       client.subscribe("hvac/cz2/#");
       setConnectionStatus("Connected");
+
+      // Show toast on initial connect or reconnect
+      if (!hasConnectedOnce.current) {
+        toast.success("Connected to HVAC system", {
+          description: "Real-time updates enabled"
+        });
+        hasConnectedOnce.current = true;
+      } else {
+        toast.success("Reconnected to HVAC system", {
+          description: "Connection restored"
+        });
+      }
+
+      // Reset disconnect toast tracking on successful connection
+      connectionToastShown.current = false;
     });
 
     client.on("message", (topic, payload, packet) => {
@@ -66,6 +87,9 @@ export default function App() {
           }
         } catch (e) {
           console.error("Failed to parse MQTT payload", e);
+          toast.error("Failed to parse MQTT message", {
+            description: "Received invalid data from HVAC system"
+          });
         }
       }
     });
@@ -74,10 +98,31 @@ export default function App() {
       console.error("Connection error: ", err);
       // mqtt.js will auto-reconnect; don't end() here
       setConnectionStatus("Error (reconnecting)");
+
+      // Debounce toast to prevent spam during connection flapping
+      const now = Date.now();
+      if (!connectionToastShown.current || (now - lastDisconnectToast.current > 5000)) {
+        toast.warning("Connection issue", {
+          description: "Attempting to reconnect..."
+        });
+        lastDisconnectToast.current = now;
+        connectionToastShown.current = true;
+      }
     });
 
     client.on("close", () => {
+      console.log("Connection closed");
       setConnectionStatus("Disconnected (reconnecting)");
+
+      // Debounce toast to prevent spam during connection flapping
+      const now = Date.now();
+      if (!connectionToastShown.current || (now - lastDisconnectToast.current > 5000)) {
+        toast.warning("Disconnected from HVAC system", {
+          description: "Attempting to reconnect..."
+        });
+        lastDisconnectToast.current = now;
+        connectionToastShown.current = true;
+      }
     });
 
     // Cleanup: close MQTT connection when component unmounts
