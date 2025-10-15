@@ -22,10 +22,10 @@ RUN npm ci
 COPY . .
 
 # Build arguments for environment variables (passed at build time)
-# Defaults match .env.example values
-ARG VITE_API_BASE_URL=http://localhost:8000
-ARG VITE_API_TIMEOUT_MS=5000
-ARG VITE_MQTT_WS_URL=wss://mqtt.mtnhouse.casa
+# No defaults - must be provided by docker-compose or build command
+ARG VITE_API_BASE_URL
+ARG VITE_API_TIMEOUT_MS
+ARG VITE_MQTT_WS_URL
 
 # Inject build-time env vars (Vite embeds these into bundle)
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
@@ -58,6 +58,9 @@ RUN printf '%s\n' \
     '#!/bin/sh' \
     'set -e' \
     '' \
+    '# Read build hash generated during Vite build' \
+    'BUILD_HASH=$(cat /usr/share/nginx/html/.build-hash 2>/dev/null || echo "unknown")' \
+    '' \
     '# Generate runtime config from environment variables' \
     'cat > /usr/share/nginx/html/config.js <<EOF' \
     'window.__MOUNTAINSTAT_CONFIG__ = {' \
@@ -66,6 +69,8 @@ RUN printf '%s\n' \
     "  VITE_MQTT_WS_URL: \"\${RUNTIME_VITE_MQTT_WS_URL}\"" \
     '};' \
     'EOF' \
+    '' \
+    'echo "Runtime config generated with hash: \${BUILD_HASH}"' \
     '' \
     'exec nginx -g "daemon off;"' > /docker-entrypoint.sh && \
     chmod +x /docker-entrypoint.sh
