@@ -752,7 +752,7 @@ export default function System(props) {
 
                         </div>
                         <div className="form-group">
-                            <label>Target Temperature:</label>
+                            <label>Target Temp:</label>
                             <input type="number" min="45" max="80" value={targetTemperatureSelection} onChange={handleTargetTemperatureChange} required />
                         </div>
                         {isTempChangeLoading && <button className="temp_disabled" type="submit" disabled><CircleLoader size={16} /> Loading...</button>}
