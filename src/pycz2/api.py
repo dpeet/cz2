@@ -178,6 +178,8 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:5174",
         "http://10.0.1.15:5173",
+        "http://100.68.198.76:5173",
+        "http://100.68.198.76:5174",
         "https://mtnhouse.casa",
         "https://tstat.mtnhouse.casa",
     ],
