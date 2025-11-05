@@ -39,17 +39,17 @@ Continuous operation improves air distribution but may increase energy use.`
   },
 
   /**
-   * All Mode / All Zone
+   * All Mode / Zone Mode
    * Reference: Manual pages 16, 21
    */
   allMode: {
-    title: "All Mode",
+    title: "Zone Mode",
     description: `Synchronize all zones to the same temperature settings:
 
-• ON — All zones use the same setpoints (zones 2-3 show dashes)
-• OFF — Each zone can be controlled independently
+• ALL ZONES — All zones use the same setpoints (zones 2-3 show dashes)
+• INDIVIDUAL — Each zone can be controlled independently
 
-When All Mode is ON, temperature changes apply to every zone. Useful for vacation mode or whole-house comfort adjustments.`
+When set to All Zones, temperature changes apply to every zone. Useful for vacation mode or whole-house comfort adjustments.`
   },
 
   /**

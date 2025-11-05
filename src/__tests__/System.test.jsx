@@ -160,11 +160,11 @@ describe('System Component - API Integration', () => {
     });
   });
 
-  describe('All Mode Changes', () => {
-    it('should call systemMode with all=true when enabling all mode', async () => {
+  describe('Zone Mode Changes', () => {
+    it('should call systemMode with all=true when enabling all zones mode', async () => {
       render(<System status={mockStatus} connection="Connected" />);
 
-      const allModeButton = screen.getByText(/Set All Mode On/i);
+      const allModeButton = screen.getByText(/Set All Zones On/i);
       fireEvent.click(allModeButton);
 
       await waitFor(() => {
@@ -175,18 +175,18 @@ describe('System Component - API Integration', () => {
       });
     });
 
-    it('should call systemMode with all=false when disabling all mode', async () => {
+    it('should call systemMode with all=false when disabling all zones mode', async () => {
       const statusWithAllMode = {
         ...mockStatus,
         status: {
           ...mockStatus.status,
-          all_mode: 5,
+          all_mode: 1, // All zones mode enabled
         },
       };
 
       render(<System status={statusWithAllMode} connection="Connected" />);
 
-      const allModeButton = screen.getByText(/Set All Mode Off/i);
+      const allModeButton = screen.getByText(/Set All Zones Off/i);
       fireEvent.click(allModeButton);
 
       await waitFor(() => {

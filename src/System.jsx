@@ -125,9 +125,9 @@ export default function System(props) {
                 if (statusData.all_mode === 1) setZoneSelection("all");
 
                 if (statusData.all_mode >= 1 && statusData.all_mode <= 8) {
-                    setAllModeButtonLabel("Set All Mode Off");
+                    setAllModeButtonLabel("Set All Zones Off");
                 } else if (statusData.all_mode === 0) {
-                    setAllModeButtonLabel("Set All Mode On");
+                    setAllModeButtonLabel("Set All Zones On");
                 }
 
                 setSystemMode(statusData.system_mode);
@@ -257,43 +257,41 @@ export default function System(props) {
         // ie buttonlabel should update automatically, not be set everywhere
         setIsAllModeChangeLoading(true);
 
-        // Immediate feedback
+        // Determine desired all-zones-mode setting
         const allModeDesired = (allMode >= 1 && allMode <= 8) ? false : true;
+        const currentSystemMode = systemMode || "Auto";
 
         toast.info("Command sent to HVAC", {
-            description: `${allModeDesired ? "Enabling" : "Disabling"} all mode`
+            description: `${allModeDesired ? "Enabling" : "Disabling"} all zones mode`
         });
 
-        // Determine desired all-mode setting (functional update)
-        setAllMode(prevAllMode => {
-            const allModeDesired = (prevAllMode >= 1 && prevAllMode <= 8) ? false : true;
-            const currentSystemMode = systemMode || "Auto";
+        // Use new POST API service: systemMode with all=true/false (see apiService.js)
+        setSystemModeApi(currentSystemMode, { all: allModeDesired })
+            .then((response) => {
+                const normalized = normalizeStatus(response);
+                logInfo(normalized);
 
-            // Use new POST API service: systemMode with all=true/false (see apiService.js)
-            setSystemModeApi(currentSystemMode, { all: allModeDesired })
-                .then((response) => {
-                    const normalized = normalizeStatus(response);
-                    logInfo(normalized);
-
-                    if (prevAllMode >= 1 && prevAllMode <= 8) {
-                        setAllModeButtonLabel("Set On");
-                    } else if (prevAllMode === 0) {
-                        setAllModeButtonLabel("Set Off");
-                    }
-                    toast.success("All mode updated", {
-                        description: `All mode ${allModeDesired ? "enabled" : "disabled"}`
-                    });
-                    setIsAllModeChangeLoading(false);
-                }).catch(error => {
-                    logError(error);
-                    toast.error("Failed to set all mode", {
-                        description: getErrorMessage(error)
-                    });
-                    setIsAllModeChangeLoading(false);
+                // Update state and button label
+                const newAllMode = allModeDesired ? 1 : 0;
+                setAllMode(newAllMode);
+                
+                if (allModeDesired) {
+                    setAllModeButtonLabel("Set All Zones Off");
+                } else {
+                    setAllModeButtonLabel("Set All Zones On");
+                }
+                
+                toast.success("Zone mode updated", {
+                    description: `All zones mode ${allModeDesired ? "enabled" : "disabled"}`
                 });
-
-            return prevAllMode;
-        });
+                setIsAllModeChangeLoading(false);
+            }).catch(error => {
+                logError(error);
+                toast.error("Failed to set zone mode", {
+                    description: getErrorMessage(error)
+                });
+                setIsAllModeChangeLoading(false);
+            });
     }
 
     const handleHoldStatusChange = (event) => {
@@ -608,7 +606,7 @@ export default function System(props) {
                     <div className='system_status_item'>
                         <div className='system_status_item_label'>
                             <p>
-                                All Mode
+                                Zone Mode
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <span style={{ marginLeft: '6px', cursor: 'help', opacity: 0.7 }}>ⓘ</span>
@@ -623,8 +621,8 @@ export default function System(props) {
                                     </TooltipContent>
                                 </Tooltip>
                             </p>
-                            {allMode >= 1 && allMode <= 8 && <h2>On</h2>}
-                            {allMode == 0 && <h2>Off</h2>}
+                            {allMode >= 1 && allMode <= 8 && <h2>All Zones</h2>}
+                            {allMode == 0 && <h2>Individual</h2>}
                             {allMode == null && <h2>Unknown</h2>}
                         </div>
                         <div className="form-group">
