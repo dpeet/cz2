@@ -9,14 +9,24 @@ const resolveEnv = () => (
   (typeof import.meta !== "undefined" && import.meta.env) || {}
 );
 
-const resolveWindowOrigin = () => {
+const resolveApiBaseUrl = () => {
   if (typeof window === "undefined") return undefined;
-  return window.location?.origin;
+  // Derive API URL from current hostname, changing only the port to 8000
+  // This allows both localhost:5173 -> localhost:8000 and tailscale IP -> tailscale IP:8000
+  const { protocol, hostname } = window.location;
+  return `${protocol}//${hostname}:8000`;
 };
 
 const resolveMqttDefault = () => {
   if (typeof window === "undefined") return "ws://localhost:9001";
-  return window.location?.protocol === "https:" ? "wss://mqtt.mtnhouse.casa" : "ws://localhost:9001";
+  const { protocol, hostname } = window.location;
+  
+  // Production HTTPS -> production WSS
+  if (protocol === "https:") return "wss://mqtt.mtnhouse.casa";
+  
+  // Dev mode: derive MQTT URL from current hostname (works for both localhost and Tailscale)
+  // Assumes MQTT WebSocket is on port 9001 at same hostname as frontend
+  return `ws://${hostname}:9001`;
 };
 
 const pickFirst = (...values) => {
@@ -35,7 +45,7 @@ export const resolveConfig = () => {
   const baseUrl = pickFirst(
     runtime.VITE_API_BASE_URL,
     env.VITE_API_BASE_URL,
-    resolveWindowOrigin(),
+    resolveApiBaseUrl(),
     "http://localhost:8000",
   );
 
