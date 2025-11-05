@@ -131,11 +131,12 @@ export default function System(props) {
                 }
 
                 setSystemMode(statusData.system_mode);
-                setSystemFanMode(statusData.fan_mode);
+                // Backend sends "On" but we display "Always On" for clarity
+                setSystemFanMode(statusData.fan_mode === "On" ? "Always On" : statusData.fan_mode);
 
                 if (statusData.fan_mode === "Auto") {
                     setSystemFanModeButtonLabel("Set Always On");
-                } else if (statusData.fan_mode === "Always On") {
+                } else if (statusData.fan_mode === "On") {
                     setSystemFanModeButtonLabel("Set Auto");
                 }
 
@@ -213,43 +214,42 @@ export default function System(props) {
         // ie buttonlabel should update automatically, not be set everywhere
         setIsFanModeChangeLoading(true);
 
-        // Immediate feedback
-        const fanModeDesired = systemFanMode === "Auto" ? "On" : "Auto";
+        // Map displayed mode back to backend values: "Always On" -> "On"
+        const currentBackendMode = systemFanMode === "Always On" ? "On" : systemFanMode;
+        const fanModeDesired = currentBackendMode === "Auto" ? "On" : "Auto";
         const fanModeLabel = fanModeDesired === "On" ? "Always On" : "Auto";
 
         toast.info("Command sent to HVAC", {
             description: `Setting fan to ${fanModeLabel}`
         });
 
-        // Map frontend labels to backend API values (functional update)
-        setSystemFanMode(prevMode => {
-            const fanModeDesired = prevMode === "Auto" ? "On" : "Auto";
+        // Use new POST API service (see apiService.js)
+        setSystemFanApi(fanModeDesired)
+            .then((response) => {
+                const normalized = normalizeStatus(response);
+                logInfo(normalized);
 
-            // Use new POST API service (see apiService.js)
-            setSystemFanApi(fanModeDesired)
-                .then((response) => {
-                    const normalized = normalizeStatus(response);
-                    logInfo(normalized);
-
-                    if (prevMode === "Auto") {
-                        setSystemFanModeButtonLabel("Set Auto");
-                    } else if (prevMode === "Always On") {
-                        setSystemFanModeButtonLabel("Set Always On");
-                    }
-                    toast.success("Fan mode updated", {
-                        description: `Fan mode changed to ${fanModeDesired === "On" ? "Always On" : "Auto"}`
-                    });
-                    setIsFanModeChangeLoading(false);
-                }).catch(error => {
-                    logError(error);
-                    toast.error("Failed to set fan mode", {
-                        description: getErrorMessage(error)
-                    });
-                    setIsFanModeChangeLoading(false);
+                // Update displayed mode and button label
+                const newDisplayMode = fanModeDesired === "On" ? "Always On" : "Auto";
+                setSystemFanMode(newDisplayMode);
+                
+                if (fanModeDesired === "On") {
+                    setSystemFanModeButtonLabel("Set Auto");
+                } else {
+                    setSystemFanModeButtonLabel("Set Always On");
+                }
+                
+                toast.success("Fan mode updated", {
+                    description: `Fan mode changed to ${fanModeLabel}`
                 });
-
-            return prevMode === "Auto" ? "Always On" : "Auto";
-        });
+                setIsFanModeChangeLoading(false);
+            }).catch(error => {
+                logError(error);
+                toast.error("Failed to set fan mode", {
+                    description: getErrorMessage(error)
+                });
+                setIsFanModeChangeLoading(false);
+            });
     }
 
     const handleAllModeChange = (event) => {

@@ -145,7 +145,7 @@ describe('System Component - API Integration', () => {
         ...mockStatus,
         status: {
           ...mockStatus.status,
-          fan_mode: 'Always On',
+          fan_mode: 'On', // Backend sends "On", not "Always On"
         },
       };
 
