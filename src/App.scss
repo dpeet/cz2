@@ -70,7 +70,6 @@ div {
     border-radius: 8px;
     background-color: #f5f5f5;
     padding: 24px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 
     .Zone {
       font-size: 1.1rem;
@@ -122,6 +121,7 @@ div {
   .system_status {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 16px;
 
     .title {
@@ -195,17 +195,79 @@ div {
     align-items: center;
     justify-content: center;
   }
-}
 
-h1 {
-  font-size: 2em;
-  line-height: 1.1;
-  margin: 0;
-}
+  // Typography scoped to app
+  h1 {
+    font-size: 2em;
+    line-height: 1.1;
+    margin: 0;
+  }
 
-h2 {
-  font-size: 1.2rem;
-  margin: 0;
+  h2 {
+    font-size: 1.2rem;
+    margin: 0;
+  }
+
+  label {
+    font-weight: bold;
+    margin-right: 4px;
+    font-size: 1rem;
+    white-space: nowrap;
+  }
+
+  // Button styles scoped to app buttons (not toast notifications)
+  button {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+  }
+
+  // Form input styles
+  input[type="number"],
+  select {
+    padding: 8px;
+    font-size: 1rem;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    height: 40px;
+    line-height: 1.5;
+  }
+
+  input:hover {
+    border: 1px solid #007bff;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    margin-top: 24px;
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: #ddd;
+    height: 8px;
+    border-radius: 4px;
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    background-color: #007bff;
+    cursor: pointer;
+    border-radius: 50%;
+  }
+
+  input[type="range"]::-webkit-slider-thumb:hover {
+    background-color: #0056b3;
+  }
 }
 
 .hold_control {
@@ -298,7 +360,8 @@ label {
   white-space: nowrap;
 }
 
-button {
+// Scope button styles to app buttons only (not toast notifications)
+.app button {
   padding: 8px 16px;
   border-radius: 8px;
   font-size: 1rem;
@@ -340,47 +403,7 @@ button.system_disabled{
   border: 1px solid #007bff;
 }
 
-input[type="number"],
-select {
-  padding: 8px;
-  font-size: 1rem;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  height: 40px;
-  line-height: 1.5;
-}
-
-input:hover {
-  border: 1px solid #007bff;
-}
-
-input[type="range"] {
-  width: 100%;
-  margin-top: 24px;
-  -webkit-appearance: none;
-  appearance: none;
-  background-color: #ddd;
-  height: 8px;
-  border-radius: 4px;
-  outline: none;
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 24px;
-  height: 24px;
-  background-color: #007bff;
-  cursor: pointer;
-  border-radius: 50%;
-  box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.1);
-}
-
-input[type="range"]::-webkit-slider-thumb:hover {
-  background-color: #0056b3;
-}
-
-
+// Commented out old button styles - kept for reference
 // button {
 //   border-radius: 8px;
 //   border: 1px solid transparent;
