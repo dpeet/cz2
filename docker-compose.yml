@@ -1,0 +1,154 @@
+# ==============================================================================
+# Mountain House Thermostat - Docker Compose Stack
+# ==============================================================================
+# Orchestrates backend (cz2) and frontend (mountainstat)
+# For local dev and on-prem deployment (fronted by external Caddy)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # Backend: Python FastAPI service (cz2)
+  # ----------------------------------------------------------------------------
+  cz2:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: mountainstat-backend:latest
+    container_name: mountainstat-cz2
+    restart: unless-stopped
+
+    # Environment variables from .env file (see .env.compose.example)
+    env_file:
+      - .env
+
+    # Override specific env vars if needed
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      # Use host.docker.internal to reach host's MQTT broker on localhost
+      - MQTT_HOST=host.docker.internal
+      - MQTT_PORT=1883
+
+    # Expose API port to host (map to different port if needed)
+    ports:
+      - "${CZ2_HOST_PORT:-8000}:8000"
+
+    # Optional: Mount cache DB for persistence across restarts
+    volumes:
+      - cz2-cache:/home/appuser/.cache/pycz2
+      # For development: mount local code (uncomment below)
+      # - ./backend/src:/app/src:ro
+
+    labels:
+        - com.centurylinklabs.watchtower.enable=false
+
+    # Health check: FastAPI /health endpoint (curl not available in slim image)
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    # No mosquitto dependency when using external broker
+    # depends_on:
+    #   mosquitto:
+    #     condition: service_healthy
+
+    networks:
+      - mountainstat-net
+
+    # Enable host networking to access localhost MQTT broker
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ----------------------------------------------------------------------------
+  # Frontend: React SPA served by Nginx
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Build-time env vars (no defaults - fail if not in .env)
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        VITE_API_TIMEOUT_MS: ${VITE_API_TIMEOUT_MS}
+        VITE_MQTT_WS_URL: ${VITE_MQTT_WS_URL}
+    image: mountainstat-frontend:latest
+    container_name: mountainstat-frontend
+    restart: unless-stopped
+    environment:
+      # Runtime env vars (override build-time via config.js generation)
+      - RUNTIME_VITE_API_BASE_URL=${VITE_API_BASE_URL}
+      - RUNTIME_VITE_API_TIMEOUT_MS=${VITE_API_TIMEOUT_MS}
+      - RUNTIME_VITE_MQTT_WS_URL=${VITE_MQTT_WS_URL}
+
+    # Expose frontend port to host
+    ports:
+      - "${FRONTEND_HOST_PORT:-4173}:80"
+
+    # Health check: verify nginx is serving files
+    healthcheck:
+      test: ["CMD", "test", "-f", "/usr/share/nginx/html/index.html"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    labels:
+        - com.centurylinklabs.watchtower.enable=false    
+
+    # Note: run frontend independently for WS validation; backend may be offline
+    # depends_on:
+    #   cz2:
+    #     condition: service_healthy
+
+    networks:
+      - mountainstat-net
+
+# ------------------------------------------------------------------------------
+# Networks
+# ------------------------------------------------------------------------------
+networks:
+  mountainstat-net:
+    driver: bridge
+
+# ------------------------------------------------------------------------------
+# Volumes (persistent data)
+# ------------------------------------------------------------------------------
+volumes:
+  # Backend cache database (SQLite)
+  cz2-cache:
+    driver: local
+
+# ==============================================================================
+# Usage Instructions:
+#
+# 1. Setup:
+#    cp .env.compose.example .env
+#    # Edit .env with your HVAC connection, MQTT credentials, etc.
+#
+# 2. Build and start all services:
+#    docker compose up --build -d
+#
+# 3. View logs:
+#    docker compose logs -f
+#    docker compose logs -f cz2
+#
+# 4. Stop services:
+#    docker compose down
+#
+# 5. Stop and remove volumes (clean slate):
+#    docker compose down -v
+#
+# 6. Production deployment:
+#    - Use external MQTT broker: comment out mosquitto service
+#    - Set MQTT_HOST in .env to external broker IP/hostname
+#    - Configure host-level Caddy for TLS termination and reverse proxy
+#    - Update VITE_MQTT_WS_URL in .env to external WebSocket URL
+#
+# 7. Development mode:
+#    - Uncomment volume mount in cz2 service to live-reload backend code
+#    - Access frontend at http://localhost:4173
+#    - Access backend API at http://localhost:8000/docs
+# ==============================================================================

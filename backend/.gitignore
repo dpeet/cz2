@@ -1,6 +1,3 @@
-# Environment
-.env
-
 # Python
 __pycache__/
 *.py[cod]
@@ -21,7 +18,8 @@ dist/
 .pytest_cache/
 htmlcov/
 
-# Python environments
+# Environments
+.env
 .venv
 venv/
 env/
@@ -34,33 +32,13 @@ dmypy.json
 .pyre/
 .ruff_cache/
 
-# Package managers
-.uv/
-
-# Node.js / Frontend
-node_modules
-dist-ssr
-*.local
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-# Logs
-logs
-*.log
-
 # IDEs
-.vscode/*
-!.vscode/extensions.json
+.vscode/
 *.code-workspace
 .idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+
+# Package managers
+.uv/
 
 # macOS
 .DS_Store
@@ -68,4 +46,5 @@ logs
 *.icloud
 
 # Project specific
+*.log
 digest.txt

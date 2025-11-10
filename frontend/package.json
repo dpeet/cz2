@@ -1,0 +1,37 @@
+{
+  "name": "mountainstat",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui"
+  },
+  "dependencies": {
+    "@radix-ui/react-tooltip": "^1.2.8",
+    "axios": "^1.12.2",
+    "classnames": "^2.5.1",
+    "lucide-react": "^0.545.0",
+    "mqtt": "^5.14.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-spinners": "^0.17.0",
+    "sass": "^1.93.2",
+    "sonner": "^2.0.7",
+    "typescript": "^5.9.3",
+    "vite": "^7"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "^18.0.28",
+    "@types/react-dom": "^18.0.10",
+    "@vitejs/plugin-react": "^5.0.4",
+    "@vitest/ui": "^3.2.4",
+    "happy-dom": "^20.0.1",
+    "vitest": "^3.2.4"
+  }
+}
