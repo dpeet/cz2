@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     SSE_HEARTBEAT_INTERVAL: int = Field(default=30, ge=10)
     SSE_MAX_SUBSCRIBERS_PER_IP: int = Field(default=5, ge=1)
 
+    # Healthcheck Settings
+    HEALTHCHECK_UUID: str = ""  # UUID from healthchecks.io (leave empty to disable)
+    HEALTHCHECK_BASE_URL: str = "https://healthchecks.tpeet.net/ping"
+    HEALTHCHECK_TIMEOUT: int = Field(default=5, ge=1)
+
     # Command Queue Settings
     COMMAND_QUEUE_MAX_SIZE: int = Field(default=100, ge=10)
     COMMAND_TIMEOUT_SECONDS: int = Field(default=30, ge=5)
