@@ -53,7 +53,7 @@ describe('API Service - Environment Configuration', () => {
     );
   });
 
-  it('should fallback to window.location.origin if VITE_API_BASE_URL unset', async () => {
+    it('should derive API base URL from window.location when env unset', async () => {
     // Test fallback behavior when env var is not set
     // Expected: Uses window.location.origin as base URL
     const originalEnv = import.meta.env.VITE_API_BASE_URL;
@@ -70,11 +70,13 @@ describe('API Service - Environment Configuration', () => {
     // Restore
     import.meta.env.VITE_API_BASE_URL = originalEnv;
 
-    expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        baseURL: window.location.origin,
-      })
-    );
+      const expectedBaseUrl = `${window.location.protocol}//${window.location.hostname}:8000`;
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseURL: expectedBaseUrl,
+          timeout: 35000,
+        })
+      );
   });
 
   it('should use VITE_API_TIMEOUT_MS from environment', async () => {
@@ -336,9 +338,9 @@ describe('API Service - setZoneHold()', () => {
     });
   });
 
-  it('should handle zoneId="all" by iterating cached status zones', async () => {
-    // Requirement: When zoneId === "all", issue requests for each zone
-    // in cached status
+  it('should handle zoneId="all" via batch endpoint', async () => {
+    // Requirement: When zoneId === "all", use batch request covering
+    // every zone reflected in cached status
     const cachedStatus = {
       zones: [
         { temperature: 70 },
@@ -353,16 +355,9 @@ describe('API Service - setZoneHold()', () => {
 
     await setZoneHold('all', true, cachedStatus);
 
-    expect(mockAxiosInstance.post).toHaveBeenCalledTimes(3);
-    expect(mockAxiosInstance.post).toHaveBeenCalledWith('/zones/1/hold', {
-      hold: true,
-      temp: true,
-    });
-    expect(mockAxiosInstance.post).toHaveBeenCalledWith('/zones/2/hold', {
-      hold: true,
-      temp: true,
-    });
-    expect(mockAxiosInstance.post).toHaveBeenCalledWith('/zones/3/hold', {
+    expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1);
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith('/zones/batch/temperature', {
+      zones: [1, 2, 3],
       hold: true,
       temp: true,
     });

@@ -11,6 +11,8 @@ const __dirname = dirname(__filename)
 // Load env vars from .env.development for test environment
 const testEnv = loadEnv('development', process.cwd(), '')
 
+const withFallback = (value, fallback) => (value !== undefined && value !== '' ? value : fallback)
+
 // Generate unique build hash for cache busting
 const BUILD_HASH = process.env.VITE_CONFIG_HASH || Date.now().toString()
 
@@ -58,9 +60,9 @@ export default defineConfig({
     setupFiles: './src/__tests__/setup.js',
     env: {
       // Load from .env.development to match actual dev environment
-      VITE_API_BASE_URL: testEnv.VITE_API_BASE_URL,
-      VITE_API_TIMEOUT_MS: testEnv.VITE_API_TIMEOUT_MS,
-      VITE_MQTT_WS_URL: testEnv.VITE_MQTT_WS_URL,
+      VITE_API_BASE_URL: withFallback(testEnv.VITE_API_BASE_URL, 'http://localhost:8000'),
+      VITE_API_TIMEOUT_MS: withFallback(testEnv.VITE_API_TIMEOUT_MS, '35000'),
+      VITE_MQTT_WS_URL: withFallback(testEnv.VITE_MQTT_WS_URL, 'ws://localhost:9001'),
     },
   },
 })

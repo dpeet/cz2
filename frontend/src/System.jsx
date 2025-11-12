@@ -316,9 +316,10 @@ export default function System(props) {
         // Use new POST API service: setZoneHold("all", hold, cachedStatus)
         // (see apiService.js)
         setZoneHold("all", holdStatusDesired, statusData)
-            .then((responses) => {
-                // Normalize each response
-                const normalized = responses.map(r => normalizeStatus(r));
+            .then((responsePayload) => {
+                // Normalize API payload(s) regardless of response shape
+                const payloads = Array.isArray(responsePayload) ? responsePayload : [responsePayload];
+                const normalized = payloads.map((payload) => normalizeStatus(payload));
                 logInfo(normalized);
 
                 if (holdStatusDesired) {
