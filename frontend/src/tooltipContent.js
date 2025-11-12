@@ -76,7 +76,7 @@ Press Hold again to return to your normal schedule.`
     title: "Temperature Settings",
     description: `Set desired heating and cooling temperatures for zones:
 
-• Valid range: 45-80°F
+• Valid range: 45-85°F
 • Temporary changes last until next scheduled period
 • Use Hold to maintain settings indefinitely
 

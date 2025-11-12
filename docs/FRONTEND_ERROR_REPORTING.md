@@ -101,11 +101,11 @@ setSystemModeApi(newMode)
 
 ### 2. Input Validation (`System.jsx:309-313`)
 
-Temperature range validation (45-80°F):
+Temperature range validation (45-85°F):
 ```javascript
-if (targetTemperatureSelection < 45 || targetTemperatureSelection > 80) {
+if (targetTemperatureSelection < 45 || targetTemperatureSelection > 85) {
     toast.error("Temperature out of range", {
-        description: "Please enter a temperature between 45°F and 80°F"
+        description: "Please enter a temperature between 45°F and 85°F"
     });
     return;
 }
@@ -113,7 +113,7 @@ if (targetTemperatureSelection < 45 || targetTemperatureSelection > 80) {
 
 HTML5 validation provides additional client-side validation:
 ```jsx
-<input type="number" min="45" max="80" required />
+<input type="number" min="45" max="85" required />
 ```
 
 ### 3. MQTT Connection Events (`App.jsx`)

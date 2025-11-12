@@ -184,4 +184,4 @@ response normaliser). Remaining high-level tasks:
 
 ### Temperature Encoding
 - Stored as single byte: (temp_f - 34) / 2
-- Valid range: 45-80°F for setpoints
+- Valid range: 45-85°F for setpoints
