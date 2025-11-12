@@ -101,6 +101,40 @@ export const setZoneTemperature = async (zoneId, options = {}) => {
 };
 
 /**
+ * Set temperature for multiple zones in a single batch request
+ * @param {number[]} zoneIds - Array of zone IDs to update
+ * @param {Object} options - Temperature options
+ * @param {string} options.mode - Temperature mode ('heat' or 'cool')
+ * @param {number} options.temp - Temperature value
+ * @param {boolean} options.tempFlag - Optional temporary hold flag
+ * @param {boolean} options.hold - Optional permanent hold flag
+ * @returns {Promise} Response with status and meta
+ */
+export const setBatchZoneTemperature = async (zoneIds, options = {}) => {
+  const { mode, temp } = options;
+  const payload = { zones: zoneIds };
+
+  // Build payload based on mode - backend expects 'heat' or 'cool' key
+  if (mode === "heat") {
+    payload.heat = temp;
+  } else if (mode === "cool") {
+    payload.cool = temp;
+  }
+
+  // Include optional flags if provided
+  if (options.tempFlag !== undefined) {
+    payload.temp = options.tempFlag;
+  }
+  if (options.hold !== undefined) {
+    payload.hold = options.hold;
+  }
+
+  const client = getApiClient();
+  const response = await client.post("/zones/batch/temperature", payload);
+  return response.data;
+};
+
+/**
  * Set zone hold status
  * @param {number|string} zoneId - The zone ID or 'all' for all zones
  * @param {boolean} hold - Whether to enable or disable hold

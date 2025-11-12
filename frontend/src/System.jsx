@@ -9,6 +9,7 @@ import {
   systemMode as setSystemModeApi,
   systemFan as setSystemFanApi,
   setZoneTemperature,
+  setBatchZoneTemperature,
   setZoneHold,
   requestUpdate as requestUpdateApi
 } from "./apiService";
@@ -413,10 +414,10 @@ export default function System(props) {
         event.preventDefault();
         setIsTempChangeLoading(true);
 
-        // Validate temperature range (45-80°F)
-        if (targetTemperatureSelection < 45 || targetTemperatureSelection > 80) {
+        // Validate temperature range (45-85°F)
+        if (targetTemperatureSelection < 45 || targetTemperatureSelection > 85) {
             toast.error("Temperature out of range", {
-                description: "Please enter a temperature between 45°F and 80°F"
+                description: "Please enter a temperature between 45°F and 85°F"
             });
             setIsTempChangeLoading(false);
             return;
@@ -425,26 +426,24 @@ export default function System(props) {
         // Extract actual status from normalized object
         const statusData = CZ2Status.status || CZ2Status;
 
-        // Handle "all" zones by issuing parallel requests for each zone
+        // Handle "all" zones by issuing a single batch request
         if (zoneSelection === "all" && statusData && statusData.zones) {
             // Immediate feedback
             toast.info("Command sent to HVAC", {
                 description: `Setting all zones to ${targetTemperatureSelection}°F (${modeSelection})`
             });
 
-            const promises = statusData.zones.map((_, index) => {
-                const zoneId = index + 1;
-                return setZoneTemperature(zoneId, {
-                    mode: modeSelection,
-                    temp: targetTemperatureSelection,
-                    tempFlag: true,
-                });
-            });
+            // Get zone IDs from actual zones array (1-indexed)
+            const zoneIds = statusData.zones.map((_, index) => index + 1);
 
-            Promise.all(promises)
-                .then((responses) => {
-                    // Normalize each response
-                    const normalized = responses.map(r => normalizeStatus(r));
+            setBatchZoneTemperature(zoneIds, {
+                mode: modeSelection,
+                temp: targetTemperatureSelection,
+                tempFlag: true,
+            })
+                .then((response) => {
+                    // Normalize the response
+                    const normalized = normalizeStatus(response);
                     logInfo(normalized);
                     toast.success("Temperature updated", {
                         description: `All zones set to ${targetTemperatureSelection}°F (${modeSelection})`
@@ -746,7 +745,7 @@ export default function System(props) {
                         </div>
                         <div className="form-group">
                             <label>Target Temp:</label>
-                            <input type="number" min="45" max="80" value={targetTemperatureSelection} onChange={handleTargetTemperatureChange} required />
+                            <input type="number" min="45" max="85" value={targetTemperatureSelection} onChange={handleTargetTemperatureChange} required />
                         </div>
                         {isTempChangeLoading && <button className="temp_disabled" type="submit" disabled><CircleLoader size={16} /> Loading...</button>}
                         {!isTempChangeLoading && <button className="temp" type="submit">Submit</button>}
