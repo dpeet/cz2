@@ -218,7 +218,7 @@ Set heating and/or cooling setpoints for a specific zone.
 
 | Field | Type | Required | Range | Default | Description |
 |-------|------|----------|-------|---------|-------------|
-| `heat` | integer | No | 45-74°F | `null` | Heating setpoint |
+| `heat` | integer | No | 45-85°F | `null` | Heating setpoint |
 | `cool` | integer | No | 64-99°F | `null` | Cooling setpoint |
 | `temp` | boolean | No | - | `false` | Enable temporary hold |
 | `hold` | boolean | No | - | `false` | Enable permanent hold |
@@ -261,6 +261,77 @@ curl -X POST http://localhost:8000/zones/1/temperature \
 curl -X POST http://localhost:8000/zones/2/temperature \
   -H "Content-Type: application/json" \
   -d '{"cool": 74, "hold": true}'
+```
+
+---
+
+### POST /zones/batch/temperature
+
+Set heating and/or cooling setpoints for multiple zones at once in a single transaction.
+
+**Path:** `/zones/batch/temperature`
+**Method:** `POST`
+
+#### Request Body
+
+| Field | Type | Required | Range | Default | Description |
+|-------|------|----------|-------|---------|-------------|
+| `zones` | array[int] | Yes | 1-8 zone IDs | - | Array of zone IDs to update |
+| `heat` | integer | No | 45-85°F | `null` | Heating setpoint for all zones |
+| `cool` | integer | No | 64-99°F | `null` | Cooling setpoint for all zones |
+| `temp` | boolean | No | - | `false` | Enable temporary hold for all zones |
+| `hold` | boolean | No | - | `false` | Enable permanent hold for all zones |
+| `out` | boolean | No | - | `false` | Enable out/away mode for all zones |
+
+**Important Notes:**
+
+- At least one of `heat` or `cool` should be provided
+- To apply changes, set either `temp` or `hold` to `true`
+- All zones in the `zones` array will receive the same setpoints
+- This is more efficient than calling `/zones/{zone_id}/temperature` multiple times
+- Performs the update in a single HVAC transaction (2-4 serial bus operations vs 12-16)
+- Zone IDs are validated; invalid IDs return 404
+- Duplicate zone IDs are automatically removed
+
+#### Performance Benefits
+
+**Single Zone Requests:**
+- 3 zones × 4 transactions each = 12 serial bus operations (~24 seconds)
+
+**Batch Request:**
+- 2 read + 2 write operations = 4 serial bus operations (~6-8 seconds)
+
+**Result:** ~75% faster for multi-zone updates
+
+#### Response
+
+**Success (200 OK):**
+
+```json
+{
+  "status": { /* current system status */ },
+  "meta": { /* cache metadata */ },
+  "message": "Zones 1, 2, 3 temperature updated"
+}
+```
+
+**Client Errors:**
+
+- **404 Not Found:** One or more zone IDs invalid (exceeds configured `CZ_ZONES`)
+- **422 Unprocessable Entity:** Temperature out of range, invalid types, or empty zones array
+
+#### Example
+
+```bash
+# Set all 3 zones to 70°F heating with temporary hold
+curl -X POST http://localhost:8000/zones/batch/temperature \
+  -H "Content-Type: application/json" \
+  -d '{"zones": [1, 2, 3], "heat": 70, "temp": true}'
+
+# Set zones 1 and 2 cooling to 74°F with permanent hold
+curl -X POST http://localhost:8000/zones/batch/temperature \
+  -H "Content-Type: application/json" \
+  -d '{"zones": [1, 2], "cool": 74, "hold": true}'
 ```
 
 ---

@@ -89,7 +89,17 @@ class SystemStatus(BaseModel):
 
 
 class ZoneTemperatureArgs(BaseModel):
-    heat: int | None = Field(None, ge=45, le=74)
+    heat: int | None = Field(None, ge=45, le=85)
+    cool: int | None = Field(None, ge=64, le=99)
+    temp: bool | None = False
+    hold: bool | None = False
+    out: bool | None = False
+
+
+class BatchZoneTemperatureArgs(BaseModel):
+    """Arguments for setting temperature on multiple zones at once."""
+    zones: list[int] = Field(..., min_length=1, max_length=8)
+    heat: int | None = Field(None, ge=45, le=85)
     cool: int | None = Field(None, ge=64, le=99)
     temp: bool | None = False
     hold: bool | None = False

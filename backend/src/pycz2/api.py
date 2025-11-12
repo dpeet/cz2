@@ -14,6 +14,7 @@ from .cache import get_cache
 from .config import settings
 from .core.client import ComfortZoneIIClient, get_client, get_lock
 from .core.models import (
+    BatchZoneTemperatureArgs,
     SystemFanArgs,
     SystemModeArgs,
     SystemStatus,
@@ -540,6 +541,127 @@ async def set_system_fan(
         raise HTTPException(429, "Command queue full, try again later")
     except Exception as e:
         log.error(f"Failed to set fan mode: {e}")
+        if settings.ENABLE_CACHE:
+            cache = await get_cache()
+            await cache.update(None, source="error", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/zones/batch/temperature")
+async def set_batch_zone_temperature(
+    args: BatchZoneTemperatureArgs,
+    client: ComfortZoneIIClient = Depends(get_client),
+    mqtt_client: MqttClient = Depends(get_mqtt_client),
+    lock: asyncio.Lock = Depends(get_lock),
+) -> dict:
+    """
+    Set the heating and/or cooling setpoints for multiple zones at once.
+    This is more efficient than calling /zones/{zone_id}/temperature multiple times,
+    as it performs the update in a single transaction.
+
+    You must also set `hold` or `temp` to true for the change to stick.
+    """
+    # Validate all zone IDs
+    for zone_id in args.zones:
+        if not 1 <= zone_id <= settings.CZ_ZONES:
+            raise HTTPException(status_code=404, detail=f"Zone {zone_id} not found.")
+
+    # Remove duplicates
+    zones = list(set(args.zones))
+
+    try:
+        if not settings.WORKER_ENABLED:
+            # Use HVAC service for CLI-style operations
+            service = await get_hvac_service()
+            await service.execute_command(
+                "set_zone_setpoints",
+                zones=zones,
+                heat_setpoint=args.heat,
+                cool_setpoint=args.cool,
+                temporary_hold=args.temp,
+                hold=args.hold,
+                out_mode=args.out,
+            )
+
+            status_obj, meta = await service.get_status(force_refresh=False)
+
+            # Publish to MQTT if enabled
+            if settings.MQTT_ENABLED and status_obj:
+                await mqtt_client.publish_status(status_obj)
+
+            zone_list = ", ".join(map(str, sorted(zones)))
+            return {
+                "status": _status_payload(status_obj),
+                "meta": meta.to_dict(),
+                "message": f"Zones {zone_list} temperature updated",
+            }
+        elif settings.WORKER_ENABLED:
+            # Get current state for provisional calculation
+            cache = await get_cache()
+            current_status, _ = await cache.get()
+
+            # Use worker queue (non-blocking)
+            worker = await get_worker()
+            cmd_status = await worker.enqueue_command(
+                CommandType.SET_ZONE_TEMPERATURE,
+                {
+                    "zones": zones,
+                    "heat_setpoint": args.heat,
+                    "cool_setpoint": args.cool,
+                    "temporary_hold": args.temp,
+                    "hold": args.hold,
+                    "out_mode": args.out,
+                },
+                priority=1,  # High priority for user commands
+            )
+
+            # Calculate provisional state
+            provisional = calculate_provisional_state(
+                current_status, CommandType.SET_ZONE_TEMPERATURE, cmd_status.args
+            )
+
+            # Return 202 with command info
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "command_id": cmd_status.id,
+                    "status": cmd_status.status,
+                    "provisional_state": provisional,
+                    "check_status_at": f"/commands/{cmd_status.id}",
+                },
+            )
+        else:
+            # Legacy path (direct connection)
+            async with lock, client.connection():
+                await client.set_zone_setpoints(
+                    zones=zones,
+                    heat_setpoint=args.heat,
+                    cool_setpoint=args.cool,
+                    temporary_hold=args.temp,
+                    hold=args.hold,
+                    out_mode=args.out,
+                )
+                status = await client.get_status_data()
+
+            # Update cache if enabled
+            if settings.ENABLE_CACHE:
+                cache = await get_cache()
+                await cache.update(status, source="writeback")
+
+            if settings.MQTT_ENABLED:
+                await mqtt_client.publish_status(status)
+
+            # Return synchronous result
+            if settings.ENABLE_CACHE:
+                _, meta = await cache.get()
+                return {"status": _status_payload(status), "meta": meta.to_dict()}
+            else:
+                return {"status": _status_payload(status)}
+
+    except asyncio.QueueFull:
+        raise HTTPException(429, "Command queue full, try again later")
+    except Exception as e:
+        log.error(f"Failed to set batch zone temperature: {e}")
         if settings.ENABLE_CACHE:
             cache = await get_cache()
             await cache.update(None, source="error", error=str(e))
