@@ -231,6 +231,10 @@ Set heating and/or cooling setpoints for a specific zone.
 - `temp=true` → Temporary hold (until next schedule change)
 - `hold=true` → Permanent hold (until manually cleared)
 - Temperature ranges are validated; out-of-range values return 422
+- **Setpoint Gap Requirement:** Heat must be at least 2°F below cool (cool ≥ heat + 2)
+  - When setting only `heat`, it's validated against the zone's current `cool` setpoint
+  - When setting only `cool`, it's validated against the zone's current `heat` setpoint
+  - Violations return 422 with descriptive error message
 
 #### Response
 
@@ -247,7 +251,10 @@ Set heating and/or cooling setpoints for a specific zone.
 **Client Errors:**
 
 - **404 Not Found:** Invalid zone ID (exceeds configured `CZ_ZONES`)
-- **422 Unprocessable Entity:** Temperature out of range or invalid types
+- **422 Unprocessable Entity:**
+  - Temperature out of range (heat: 45-85°F, cool: 64-99°F)
+  - Setpoint conflict (heat not at least 2°F below cool)
+  - Invalid types or missing required fields
 
 #### Example
 
@@ -292,6 +299,10 @@ Set heating and/or cooling setpoints for multiple zones at once in a single tran
 - Performs the update in a single HVAC transaction (2-4 serial bus operations vs 12-16)
 - Zone IDs are validated; invalid IDs return 404
 - Duplicate zone IDs are automatically removed
+- **Setpoint Gap Requirement:** Heat must be at least 2°F below cool (cool ≥ heat + 2)
+  - When setting only `heat`, it's validated against each zone's current `cool` setpoint
+  - When setting only `cool`, it's validated against each zone's current `heat` setpoint
+  - If any zone has a conflict, the entire request fails with 422
 
 #### Performance Benefits
 
@@ -318,7 +329,10 @@ Set heating and/or cooling setpoints for multiple zones at once in a single tran
 **Client Errors:**
 
 - **404 Not Found:** One or more zone IDs invalid (exceeds configured `CZ_ZONES`)
-- **422 Unprocessable Entity:** Temperature out of range, invalid types, or empty zones array
+- **422 Unprocessable Entity:**
+  - Temperature out of range (heat: 45-85°F, cool: 64-99°F)
+  - Setpoint conflict in any zone (heat not at least 2°F below cool)
+  - Invalid types or empty zones array
 
 #### Example
 

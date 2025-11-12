@@ -426,6 +426,42 @@ export default function System(props) {
         // Extract actual status from normalized object
         const statusData = CZ2Status.status || CZ2Status;
 
+        // Validate heat/cool setpoint relationship (2°F minimum gap)
+        if (statusData && statusData.zones) {
+            const zonesToCheck = zoneSelection === "all"
+                ? statusData.zones
+                : [statusData.zones[parseInt(zoneSelection) - 1]];
+
+            for (let i = 0; i < zonesToCheck.length; i++) {
+                const zone = zonesToCheck[i];
+                if (!zone) continue;
+
+                const zoneNum = zoneSelection === "all" ? i + 1 : parseInt(zoneSelection);
+
+                // Check heat vs existing cool
+                if (modeSelection === "heat" && zone.cool_setpoint) {
+                    if (targetTemperatureSelection >= zone.cool_setpoint - 1) {
+                        toast.error("Invalid temperature", {
+                            description: `Heat setpoint (${targetTemperatureSelection}°F) must be at least 2°F below ${zoneSelection === "all" ? `zone ${zoneNum}'s` : 'current'} cool setpoint (${zone.cool_setpoint}°F). Gap would be: ${zone.cool_setpoint - targetTemperatureSelection}°F.`
+                        });
+                        setIsTempChangeLoading(false);
+                        return;
+                    }
+                }
+
+                // Check cool vs existing heat
+                if (modeSelection === "cool" && zone.heat_setpoint) {
+                    if (targetTemperatureSelection <= zone.heat_setpoint + 1) {
+                        toast.error("Invalid temperature", {
+                            description: `Cool setpoint (${targetTemperatureSelection}°F) must be at least 2°F above ${zoneSelection === "all" ? `zone ${zoneNum}'s` : 'current'} heat setpoint (${zone.heat_setpoint}°F). Gap would be: ${targetTemperatureSelection - zone.heat_setpoint}°F.`
+                        });
+                        setIsTempChangeLoading(false);
+                        return;
+                    }
+                }
+            }
+        }
+
         // Handle "all" zones by issuing a single batch request
         if (zoneSelection === "all" && statusData && statusData.zones) {
             // Immediate feedback

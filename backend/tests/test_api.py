@@ -418,6 +418,90 @@ class TestAPIIntegration:
         # Verify validation error
         assert response.status_code == 422
 
+    def test_post_zone_temperature_heat_too_close_to_cool_model_validation(
+        self, client
+    ):
+        """Test model-level validation when heat and cool are both provided with insufficient gap."""
+        # Heat and cool with only 1°F gap (requires 2°F)
+        payload = {
+            "heat": 71,
+            "cool": 72,  # Only 1°F gap
+            "temp": True,
+        }
+
+        # Make request
+        response = client.post("/zones/1/temperature", json=payload)
+
+        # Verify validation error
+        assert response.status_code == 422
+        data = response.json()
+        assert "must be at least 2°F below" in str(data)
+
+    def test_post_zone_temperature_heat_conflicts_with_existing_cool(
+        self, client, mock_client, sample_status
+    ):
+        """Test API-level validation when heat conflicts with existing cool setpoint."""
+        # Configure mocks - zone has cool setpoint of 74
+        mock_client.get_status_data.return_value = sample_status
+
+        # Try to set heat to 73 (only 1°F gap from cool=74)
+        payload = {
+            "heat": 73,  # Too close to existing cool=74
+            "temp": True,
+        }
+
+        # Make request
+        response = client.post("/zones/1/temperature", json=payload)
+
+        # Verify validation error
+        assert response.status_code == 422
+        data = response.json()
+        assert "must be at least 2°F below" in data["detail"]
+        assert "74" in data["detail"]  # Should mention current cool setpoint
+
+    def test_post_zone_temperature_cool_conflicts_with_existing_heat(
+        self, client, mock_client, sample_status
+    ):
+        """Test API-level validation when cool conflicts with existing heat setpoint."""
+        # Configure mocks - zone has heat setpoint of 68
+        mock_client.get_status_data.return_value = sample_status
+
+        # Try to set cool to 69 (only 1°F gap from heat=68)
+        payload = {
+            "cool": 69,  # Too close to existing heat=68
+            "temp": True,
+        }
+
+        # Make request
+        response = client.post("/zones/1/temperature", json=payload)
+
+        # Verify validation error
+        assert response.status_code == 422
+        data = response.json()
+        assert "must be at least 2°F above" in data["detail"]
+        assert "68" in data["detail"]  # Should mention current heat setpoint
+
+    def test_post_zone_temperature_valid_2_degree_gap(
+        self, client, mock_client, mock_mqtt_client, sample_status
+    ):
+        """Test that exactly 2°F gap is accepted."""
+        # Configure mocks
+        mock_client.set_zone_setpoints.return_value = None
+        mock_client.get_status_data.return_value = sample_status
+        mock_mqtt_client.publish_status.return_value = None
+
+        # Set heat to 72 with existing cool=74 (exactly 2°F gap)
+        payload = {
+            "heat": 72,
+            "temp": True,
+        }
+
+        # Make request
+        response = client.post("/zones/1/temperature", json=payload)
+
+        # Verify success
+        assert response.status_code == 200
+
     @patch("pycz2.api.settings.CZ_ZONES", 4)  # Mock 4 zones for this test
     def test_post_zone_hold_success(
         self, client, mock_client, mock_mqtt_client, sample_status

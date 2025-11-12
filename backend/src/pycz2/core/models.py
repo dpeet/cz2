@@ -1,6 +1,6 @@
 # src/pycz2/core/models.py
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .constants import FanMode, SystemMode
 
@@ -95,6 +95,17 @@ class ZoneTemperatureArgs(BaseModel):
     hold: bool | None = False
     out: bool | None = False
 
+    @model_validator(mode='after')
+    def validate_setpoint_relationship(self):
+        """Ensure heat setpoint is at least 2°F below cool setpoint."""
+        if self.heat is not None and self.cool is not None:
+            if self.heat >= self.cool - 1:  # Requires 2°F gap (cool must be >= heat + 2)
+                raise ValueError(
+                    f"Heat setpoint ({self.heat}°F) must be at least 2°F below "
+                    f"cool setpoint ({self.cool}°F). Current gap: {self.cool - self.heat}°F."
+                )
+        return self
+
 
 class BatchZoneTemperatureArgs(BaseModel):
     """Arguments for setting temperature on multiple zones at once."""
@@ -104,6 +115,17 @@ class BatchZoneTemperatureArgs(BaseModel):
     temp: bool | None = False
     hold: bool | None = False
     out: bool | None = False
+
+    @model_validator(mode='after')
+    def validate_setpoint_relationship(self):
+        """Ensure heat setpoint is at least 2°F below cool setpoint."""
+        if self.heat is not None and self.cool is not None:
+            if self.heat >= self.cool - 1:  # Requires 2°F gap (cool must be >= heat + 2)
+                raise ValueError(
+                    f"Heat setpoint ({self.heat}°F) must be at least 2°F below "
+                    f"cool setpoint ({self.cool}°F). Current gap: {self.cool - self.heat}°F."
+                )
+        return self
 
 
 class SystemModeArgs(BaseModel):

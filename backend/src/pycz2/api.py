@@ -569,6 +569,39 @@ async def set_batch_zone_temperature(
     # Remove duplicates
     zones = list(set(args.zones))
 
+    # Validate setpoint relationship against current zone setpoints
+    # Get current status to check existing setpoints
+    if not settings.WORKER_ENABLED:
+        service = await get_hvac_service()
+        current_status, _ = await service.get_status(force_refresh=False)
+    else:
+        cache = await get_cache()
+        current_status, _ = await cache.get()
+
+    if current_status and current_status.zones:
+        for zone_id in zones:
+            zone = current_status.zones[zone_id - 1]  # 0-indexed
+
+            # Check heat vs existing cool (if only heat is being set)
+            if args.heat is not None and args.cool is None:
+                if args.heat >= zone.cool_setpoint - 1:  # Requires 2°F gap
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Heat setpoint ({args.heat}°F) must be at least 2°F below "
+                               f"zone {zone_id}'s cool setpoint ({zone.cool_setpoint}°F). "
+                               f"Current gap would be: {zone.cool_setpoint - args.heat}°F."
+                    )
+
+            # Check cool vs existing heat (if only cool is being set)
+            if args.cool is not None and args.heat is None:
+                if args.cool <= zone.heat_setpoint + 1:  # Requires 2°F gap
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Cool setpoint ({args.cool}°F) must be at least 2°F above "
+                               f"zone {zone_id}'s heat setpoint ({zone.heat_setpoint}°F). "
+                               f"Current gap would be: {args.cool - zone.heat_setpoint}°F."
+                    )
+
     try:
         if not settings.WORKER_ENABLED:
             # Use HVAC service for CLI-style operations
@@ -682,6 +715,38 @@ async def set_zone_temperature(
     """
     if not 1 <= zone_id <= settings.CZ_ZONES:
         raise HTTPException(status_code=404, detail=f"Zone {zone_id} not found.")
+
+    # Validate setpoint relationship against current zone setpoints
+    # Get current status to check existing setpoints
+    if not settings.WORKER_ENABLED:
+        service = await get_hvac_service()
+        current_status, _ = await service.get_status(force_refresh=False)
+    else:
+        cache = await get_cache()
+        current_status, _ = await cache.get()
+
+    if current_status and current_status.zones:
+        zone = current_status.zones[zone_id - 1]  # 0-indexed
+
+        # Check heat vs existing cool (if only heat is being set)
+        if args.heat is not None and args.cool is None:
+            if args.heat >= zone.cool_setpoint - 1:  # Requires 2°F gap
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Heat setpoint ({args.heat}°F) must be at least 2°F below "
+                           f"current cool setpoint ({zone.cool_setpoint}°F). "
+                           f"Current gap would be: {zone.cool_setpoint - args.heat}°F."
+                )
+
+        # Check cool vs existing heat (if only cool is being set)
+        if args.cool is not None and args.heat is None:
+            if args.cool <= zone.heat_setpoint + 1:  # Requires 2°F gap
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Cool setpoint ({args.cool}°F) must be at least 2°F above "
+                           f"current heat setpoint ({zone.heat_setpoint}°F). "
+                           f"Current gap would be: {args.cool - zone.heat_setpoint}°F."
+                )
 
     try:
         if not settings.WORKER_ENABLED:

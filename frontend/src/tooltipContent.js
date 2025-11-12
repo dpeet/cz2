@@ -77,6 +77,8 @@ Press Hold again to return to your normal schedule.`
     description: `Set desired heating and cooling temperatures for zones:
 
 • Valid range: 45-85°F
+• Heat must be at least 2°F below cool setpoint
+• Cool must be at least 2°F above heat setpoint
 • Temporary changes last until next scheduled period
 • Use Hold to maintain settings indefinitely
 
