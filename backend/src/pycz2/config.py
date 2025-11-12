@@ -37,7 +37,6 @@ class Settings(BaseSettings):
 
     # Service Settings (CLI-style refresh)
     CACHE_REFRESH_INTERVAL: int = Field(default=300, ge=30)  # Background refresh interval in seconds
-    CACHE_MAX_AGE: int = Field(default=600, ge=60)  # Maximum cache age before forced refresh
 
     # Worker Settings (being phased out)
     WORKER_ENABLED: bool = False  # Disabled by default - using CLI-style service instead
