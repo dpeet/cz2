@@ -18,7 +18,6 @@ from .config import settings
 from .core.client import get_client, get_lock
 from .core.constants import FanMode, SystemMode
 from .core.models import SystemStatus
-from .healthcheck import send_healthcheck_ping
 
 log = logging.getLogger(__name__)
 
@@ -296,10 +295,6 @@ class HVACService:
             # Reset error counter on success
             self._consecutive_errors = 0
             self._last_refresh_time = time.time()
-
-            # Send healthcheck ping (fire-and-forget)
-            if settings.HEALTHCHECK_UUID:
-                asyncio.create_task(send_healthcheck_ping())
 
             finished_at = time.monotonic()
             log.info(
