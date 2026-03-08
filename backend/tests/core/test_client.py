@@ -2,7 +2,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from tenacity import RetryError
 
 from pycz2.core.client import ComfortZoneIIClient
 from pycz2.core.constants import (
@@ -290,7 +289,7 @@ class TestComfortZoneIIClient:
         
         # Setup mock to always return a reply for the wrong destination
         mock_reader.read.side_effect = [wrong_dest_frame] * (
-            (MAX_SEND_RETRIES * MAX_REPLY_ATTEMPTS) + 5
+            MAX_SEND_RETRIES * MAX_REPLY_ATTEMPTS + 5
         )
         
         client.reader = mock_reader
@@ -336,12 +335,12 @@ class TestComfortZoneIIClient:
         """Test send_with_reply with connection error during read."""
         # Mock connection error
         mock_reader.read.side_effect = ConnectionAbortedError("Connection lost")
-        
+
         client.reader = mock_reader
         client.writer = mock_writer
-        
-        # Should raise RetryError after exhausting retries
-        with pytest.raises(RetryError):
+
+        # Should raise ConnectionAbortedError directly (no Tenacity retry wrapper)
+        with pytest.raises(ConnectionAbortedError):
             await client.send_with_reply(1, Function.read, [0, 1, 16])
 
     @pytest.mark.asyncio
@@ -443,6 +442,57 @@ class TestComfortZoneIIClient:
         """Test serial vs TCP connection detection."""
         tcp_client = ComfortZoneIIClient("localhost:8080", 4, 99)
         serial_client = ComfortZoneIIClient("/dev/ttyUSB0", 4, 99)
-        
+
         assert not tcp_client._is_serial
         assert serial_client._is_serial
+
+    @pytest.mark.asyncio
+    async def test_set_zone_hold_only_writes_row12(self, client, mock_reader, mock_writer):
+        """Finding #8: set_zone_setpoints with hold=True only should write row 12, not row 16."""
+        row12_data = [0, 1, 12, 0, 2, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        row12_frame = self.create_mock_frame_data(99, 1, Function.reply, row12_data)
+
+        # Only need one OK reply (for row 12 write only)
+        ok_reply = self.create_mock_frame_data(1, 9, Function.reply, [0])
+
+        mock_reader.read.side_effect = [row12_frame, ok_reply]
+        client.reader = mock_reader
+        client.writer = mock_writer
+
+        await client.set_zone_setpoints(zones=[1], hold=True)
+
+        # Should be 1 read (row 12) + 1 write (row 12) = 2 calls
+        assert mock_writer.write.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_set_zone_setpoints_writes_row16_before_row12(
+        self, client, mock_reader, mock_writer
+    ):
+        """Finding #8: When both rows need writing, row 16 (setpoints) before row 12 (flags)."""
+        row12_data = [0, 1, 12, 0, 2, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        row16_data = [0, 1, 16, 0, 0, 0, 74, 74, 74, 74, 0, 68, 68, 68, 68, 0, 0, 0, 0]
+
+        row12_frame = self.create_mock_frame_data(99, 1, Function.reply, row12_data)
+        row16_frame = self.create_mock_frame_data(99, 1, Function.reply, row16_data)
+        ok_reply = self.create_mock_frame_data(1, 9, Function.reply, [0])
+
+        mock_reader.read.side_effect = [row12_frame, row16_frame, ok_reply, ok_reply]
+        client.reader = mock_reader
+        client.writer = mock_writer
+
+        await client.set_zone_setpoints(
+            zones=[1], heat_setpoint=70, hold=True
+        )
+
+        # Should be 2 reads + 2 writes = 4 calls
+        assert mock_writer.write.call_count == 4
+
+        # Parse the write calls to verify order: row 16 written before row 12
+        from pycz2.core.frame import FRAME_PARSER
+        write_calls = [call[0][0] for call in mock_writer.write.call_args_list]
+        # write_calls[0] and [1] are reads; [2] and [3] are writes
+        write_frame_1 = FRAME_PARSER.parse(write_calls[2])
+        write_frame_2 = FRAME_PARSER.parse(write_calls[3])
+        # Row 16 (setpoints) should be written first
+        assert write_frame_1.data[2] == 16
+        assert write_frame_2.data[2] == 12

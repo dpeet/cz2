@@ -9,7 +9,6 @@ os.environ.setdefault("CACHE_DB_PATH", test_db.name)
 
 # Ensure test-friendly settings: disable background services to avoid hangs
 os.environ.setdefault("ENABLE_SSE", "false")
-os.environ.setdefault("WORKER_ENABLED", "false")
 os.environ.setdefault("MQTT_ENABLED", "false")
 os.environ.setdefault("ENABLE_CACHE", "true")
 
@@ -19,7 +18,6 @@ def _isolation_env(monkeypatch):
     try:
         from pycz2 import config as cfg
         monkeypatch.setattr(cfg.settings, "ENABLE_SSE", False, raising=False)
-        monkeypatch.setattr(cfg.settings, "WORKER_ENABLED", False, raising=False)
         monkeypatch.setattr(cfg.settings, "MQTT_ENABLED", False, raising=False)
         monkeypatch.setattr(cfg.settings, "ENABLE_CACHE", True, raising=False)
     except Exception:

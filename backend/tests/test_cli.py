@@ -2,7 +2,6 @@
 from unittest.mock import AsyncMock
 
 import pytest
-from tenacity import RetryError
 from typer.testing import CliRunner
 
 from pycz2 import cli
@@ -146,8 +145,8 @@ class TestCLIIntegration:
 
     def test_status_command_failure(self, runner, mock_client, monkeypatch):
         """Test status command with client failure."""
-        # Configure mock to raise RetryError
-        mock_client.get_status_data.side_effect = RetryError(None)
+        # Configure mock to raise TimeoutError (no more Tenacity wrapper)
+        mock_client.get_status_data.side_effect = TimeoutError("No valid reply received.")
         
         # Patch the get_client function
         async def mock_get_client():
@@ -293,8 +292,8 @@ class TestCLIIntegration:
             heat_setpoint=70,
             cool_setpoint=76,
             temporary_hold=True,
-            hold=False,
-            out_mode=False
+            hold=None,
+            out_mode=None
         )
         mock_client.get_status_data.assert_called_once()
 
@@ -321,7 +320,7 @@ class TestCLIIntegration:
             zones=[2],
             heat_setpoint=68,
             cool_setpoint=None,
-            temporary_hold=False,
+            temporary_hold=None,
             hold=True,
             out_mode=True
         )

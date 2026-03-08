@@ -1,5 +1,7 @@
 # src/pycz2/core/models.py
 
+from typing import Any
+
 from pydantic import BaseModel, Field, model_validator
 
 from .constants import FanMode, SystemMode
@@ -37,7 +39,7 @@ class SystemStatus(BaseModel):
     raw: str | None = None
     zones: list[ZoneStatus]
 
-    def to_dict(self, include_raw: bool = False, flat: bool = False) -> dict:
+    def to_dict(self, include_raw: bool = False, flat: bool = False) -> dict[str, Any]:
         """
         Convert SystemStatus to dictionary.
 
@@ -66,7 +68,7 @@ class SystemStatus(BaseModel):
 
         return data
 
-    def to_json(self, include_raw: bool = False, flat: bool = False, **kwargs) -> str:
+    def to_json(self, include_raw: bool = False, flat: bool = False, **kwargs: Any) -> str:
         """
         Convert SystemStatus to JSON string.
 
@@ -88,22 +90,26 @@ class SystemStatus(BaseModel):
 # --- API Argument Models ---
 
 
+def _validate_setpoint_gap(heat: int | None, cool: int | None) -> None:
+    """Shared validation: heat must be at least 2°F below cool."""
+    if heat is not None and cool is not None:
+        if heat >= cool - 1:
+            raise ValueError(
+                f"Heat setpoint ({heat}°F) must be at least 2°F below "
+                f"cool setpoint ({cool}°F). Current gap: {cool - heat}°F."
+            )
+
+
 class ZoneTemperatureArgs(BaseModel):
     heat: int | None = Field(None, ge=45, le=85)
     cool: int | None = Field(None, ge=64, le=99)
-    temp: bool | None = False
-    hold: bool | None = False
-    out: bool | None = False
+    temp: bool | None = None
+    hold: bool | None = None
+    out: bool | None = None
 
     @model_validator(mode='after')
     def validate_setpoint_relationship(self):
-        """Ensure heat setpoint is at least 2°F below cool setpoint."""
-        if self.heat is not None and self.cool is not None:
-            if self.heat >= self.cool - 1:  # Requires 2°F gap (cool must be >= heat + 2)
-                raise ValueError(
-                    f"Heat setpoint ({self.heat}°F) must be at least 2°F below "
-                    f"cool setpoint ({self.cool}°F). Current gap: {self.cool - self.heat}°F."
-                )
+        _validate_setpoint_gap(self.heat, self.cool)
         return self
 
 
@@ -112,19 +118,13 @@ class BatchZoneTemperatureArgs(BaseModel):
     zones: list[int] = Field(..., min_length=1, max_length=8)
     heat: int | None = Field(None, ge=45, le=85)
     cool: int | None = Field(None, ge=64, le=99)
-    temp: bool | None = False
-    hold: bool | None = False
-    out: bool | None = False
+    temp: bool | None = None
+    hold: bool | None = None
+    out: bool | None = None
 
     @model_validator(mode='after')
     def validate_setpoint_relationship(self):
-        """Ensure heat setpoint is at least 2°F below cool setpoint."""
-        if self.heat is not None and self.cool is not None:
-            if self.heat >= self.cool - 1:  # Requires 2°F gap (cool must be >= heat + 2)
-                raise ValueError(
-                    f"Heat setpoint ({self.heat}°F) must be at least 2°F below "
-                    f"cool setpoint ({self.cool}°F). Current gap: {self.cool - self.heat}°F."
-                )
+        _validate_setpoint_gap(self.heat, self.cool)
         return self
 
 

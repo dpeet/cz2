@@ -16,7 +16,6 @@ from typing import Any, Optional, Tuple
 from .cache import get_cache, CacheMeta
 from .config import settings
 from .core.client import get_client, get_lock
-from .core.constants import FanMode, SystemMode
 from .core.models import SystemStatus
 
 log = logging.getLogger(__name__)
@@ -28,7 +27,7 @@ class HVACService:
     def __init__(self):
         """Initialize the HVAC service."""
         self._op_lock = get_lock()  # Serialize all HVAC bus access
-        self._refresh_task: Optional[asyncio.Task] = None
+        self._refresh_task: Optional[asyncio.Task[None]] = None
         self._stop_event = asyncio.Event()
         self._last_refresh_time = 0
         self._consecutive_errors = 0
@@ -74,7 +73,7 @@ class HVACService:
         if not force_refresh:
             # Use configured staleness threshold
             if not meta.is_stale():
-                if include_raw and (status is None or status.raw is None):
+                if include_raw and (status is None or status.raw is None):  # pyright: ignore[reportUnnecessaryComparison]
                     log.debug("Cached status lacks raw blob; refreshing with raw data")
                 else:
                     log.debug(
@@ -89,18 +88,15 @@ class HVACService:
         return await self._refresh_once(
             source="force" if force_refresh else "auto",
             include_raw=include_raw,
+            raise_on_error=force_refresh,
         )
 
-    async def execute_command(self, operation: str, **kwargs) -> SystemStatus:
+    async def execute_command(self, operation: str, **kwargs: Any) -> SystemStatus:
         """
         Execute a command using CLI-style pattern.
 
-        Args:
-            operation: Command type (set_system_mode, set_fan_mode, etc.)
-            **kwargs: Command-specific arguments
-
-        Returns:
-            Fresh SystemStatus after command execution
+        Lock acquisition and command execution have separate timeouts so that
+        a blocked lock doesn't eat into command time, and vice versa.
         """
         log.info(f"Executing command: {operation} with args: {kwargs}")
 
@@ -112,226 +108,156 @@ class HVACService:
         connection_entered_at: float | None = None
         status_fetch_started_at: float | None = None
 
+        # Step 1: Acquire lock with its own timeout
         try:
-            # Wrap entire operation in timeout to prevent indefinite hangs
-            async def _execute_with_lock():
-                nonlocal lock_acquired_at, connection_entered_at, status_fetch_started_at
+            await asyncio.wait_for(
+                self._op_lock.acquire(),
+                timeout=settings.LOCK_TIMEOUT_SECONDS,
+            )
+        except TimeoutError:
+            error_msg = (
+                f"Could not acquire HVAC lock within {settings.LOCK_TIMEOUT_SECONDS}s"
+            )
+            log.error(error_msg)
+            await cache.update(None, source="error", error=error_msg)
+            raise TimeoutError(error_msg)
 
-                log.debug(
-                    "Command %s waiting for HVAC lock (timeout=%ss)",
-                    operation,
-                    settings.COMMAND_TIMEOUT_SECONDS,
-                )
-                async with self._op_lock:
-                    lock_acquired_at = time.monotonic()
-                    lock_wait = lock_acquired_at - started_at
-                    log.info(
-                        "Command %s acquired HVAC lock after %.3fs",
-                        operation,
-                        lock_wait,
-                    )
+        lock_acquired_at = time.monotonic()
+        log.info(
+            "Command %s acquired HVAC lock after %.3fs",
+            operation,
+            lock_acquired_at - started_at,
+        )
 
-                    # Use connection context manager for automatic cleanup
-                    async with client.connection():
-                        connection_entered_at = time.monotonic()
-                        connection_wait = connection_entered_at - lock_acquired_at
-                        log.debug(
-                            "Command %s connection established after %.3fs",
-                            operation,
-                            connection_wait,
+        # Step 2: Execute with command timeout (clock starts AFTER lock acquired)
+        try:
+            async def _execute():
+                nonlocal connection_entered_at, status_fetch_started_at
+
+                async with client.connection():
+                    connection_entered_at = time.monotonic()
+
+                    if operation == "set_system_mode":
+                        mode = kwargs.get("mode")
+                        all_zones = kwargs.get("all_zones", None)
+                        await client.set_system_mode(
+                            mode=mode, all_zones_mode=all_zones,
                         )
+                    elif operation == "set_fan_mode":
+                        await client.set_fan_mode(kwargs["fan_mode"])
+                    elif operation == "set_zone_setpoints":
+                        zones = kwargs["zones"]
+                        setpoint_kwargs: dict[str, Any] = {"zones": zones}
+                        for key in (
+                            "heat_setpoint", "cool_setpoint",
+                            "temporary_hold", "hold", "out_mode",
+                        ):
+                            value = kwargs.get(key)
+                            if value is not None:
+                                setpoint_kwargs[key] = value
+                        await client.set_zone_setpoints(**setpoint_kwargs)
+                    else:
+                        raise ValueError(f"Unknown operation: {operation}")
 
-                        # Execute the requested operation
-                        if operation == "set_system_mode":
-                            mode = kwargs.get("mode")
-                            all_zones = kwargs.get("all_zones", None)
-                            await client.set_system_mode(
-                                mode=mode,
-                                all_zones_mode=all_zones,
-                            )
+                    status_fetch_started_at = time.monotonic()
+                    log.debug("Fetching fresh status after command")
+                    return await client.get_status_data()
 
-                        elif operation == "set_fan_mode":
-                            fan_mode = kwargs["fan_mode"]
-                            await client.set_fan_mode(fan_mode)
-
-                        elif operation == "set_zone_setpoints":
-                            zones = kwargs["zones"]
-                            setpoint_kwargs: dict[str, Any] = {"zones": zones}
-                            for key in (
-                                "heat_setpoint",
-                                "cool_setpoint",
-                                "temporary_hold",
-                                "hold",
-                                "out_mode",
-                            ):
-                                value = kwargs.get(key)
-                                if value is not None:
-                                    setpoint_kwargs[key] = value
-                            await client.set_zone_setpoints(**setpoint_kwargs)
-                        else:
-                            raise ValueError(f"Unknown operation: {operation}")
-
-                        status_fetch_started_at = time.monotonic()
-                        # Always fetch fresh status after a write operation
-                        log.debug("Fetching fresh status after command")
-                        status = await client.get_status_data()
-                        return status
-
-            # Execute with timeout protection
             status = await asyncio.wait_for(
-                _execute_with_lock(),
+                _execute(),
                 timeout=settings.COMMAND_TIMEOUT_SECONDS,
             )
-
-            finished_at = time.monotonic()
-            lock_wait = (lock_acquired_at - started_at) if lock_acquired_at else None
-            connection_wait = (
-                (connection_entered_at - lock_acquired_at)
-                if lock_acquired_at and connection_entered_at
-                else None
-            )
-            command_exec = (
-                (status_fetch_started_at - connection_entered_at)
-                if connection_entered_at and status_fetch_started_at
-                else None
-            )
-            total_elapsed = finished_at - started_at
-
-            # Update cache with fresh data
-            await cache.update(status, source="command")
-
-            # Reset error counter on success
-            self._consecutive_errors = 0
-
-            log.info(
-                "Command %s completed successfully in %.3fs (lock_wait=%s, connect=%s, command=%s)",
-                operation,
-                total_elapsed,
-                f"{lock_wait:.3f}s" if lock_wait is not None else "n/a",
-                f"{connection_wait:.3f}s" if connection_wait is not None else "n/a",
-                f"{command_exec:.3f}s" if command_exec is not None else "n/a",
-            )
-            return status
-
-        except asyncio.TimeoutError:
-            finished_at = time.monotonic()
-            lock_wait = (lock_acquired_at - started_at) if lock_acquired_at else None
-            waited_for_lock = lock_acquired_at is None
+        except TimeoutError:
             error_msg = (
-                f"HVAC operation timed out after {settings.COMMAND_TIMEOUT_SECONDS} seconds. "
-                "The HVAC controller may be unresponsive or experiencing heavy bus contention."
+                f"HVAC command timed out after {settings.COMMAND_TIMEOUT_SECONDS}s. "
+                "The HVAC controller may be unresponsive."
             )
-            log.error(
-                "%s (waited_for_lock=%s, lock_wait=%s, elapsed=%.3fs)",
-                error_msg,
-                waited_for_lock,
-                f"{lock_wait:.3f}s" if lock_wait is not None else "n/a",
-                finished_at - started_at,
-            )
-            # Update cache to reflect error state
+            log.error("%s (elapsed=%.3fs)", error_msg, time.monotonic() - started_at)
             await cache.update(None, source="error", error=error_msg)
             raise TimeoutError(error_msg)
         except Exception as e:
-            finished_at = time.monotonic()
-            lock_wait = (lock_acquired_at - started_at) if lock_acquired_at else None
-            connection_wait = (
-                (connection_entered_at - lock_acquired_at)
-                if lock_acquired_at and connection_entered_at
-                else None
-            )
-            log.error(
-                "Command execution failed: %s (lock_wait=%s, connect=%s, elapsed=%.3fs)",
-                e,
-                f"{lock_wait:.3f}s" if lock_wait is not None else "n/a",
-                f"{connection_wait:.3f}s" if connection_wait is not None else "n/a",
-                finished_at - started_at,
-            )
-            # Update cache to reflect error state
+            log.error("Command execution failed: %s (elapsed=%.3fs)", e, time.monotonic() - started_at)
             await cache.update(None, source="error", error=str(e))
             raise
+        finally:
+            self._op_lock.release()
+
+        await cache.update(status, source="command")
+        self._consecutive_errors = 0
+
+        log.info(
+            "Command %s completed in %.3fs",
+            operation,
+            time.monotonic() - started_at,
+        )
+        return status
 
     async def _refresh_once(
-        self, source: str = "auto", include_raw: bool = False
+        self, source: str = "auto", include_raw: bool = False,
+        raise_on_error: bool = False,
     ) -> Tuple[Optional[SystemStatus], CacheMeta]:
-        """
-        Perform a single refresh operation.
-
-        Args:
-            source: Source identifier for cache metadata
-
-        Returns:
-            Tuple of (SystemStatus or None, CacheMeta)
-        """
+        """Perform a single refresh operation with separate lock/command timeouts."""
         client = get_client()
         cache = await get_cache()
         started_at = time.monotonic()
-        lock_acquired_at: float | None = None
-        connection_entered_at: float | None = None
 
+        # Step 1: Acquire lock with its own timeout
         try:
-            async with self._op_lock:
-                lock_acquired_at = time.monotonic()
-                log.debug(
-                    "Refresh %s acquired HVAC lock after %.3fs",
-                    source,
-                    lock_acquired_at - started_at,
-                )
-                # CLI-style: connect, fetch, disconnect
+            await asyncio.wait_for(
+                self._op_lock.acquire(),
+                timeout=settings.LOCK_TIMEOUT_SECONDS,
+            )
+        except TimeoutError:
+            error_msg = f"Could not acquire HVAC lock within {settings.LOCK_TIMEOUT_SECONDS}s"
+            log.error(error_msg)
+            await cache.update(None, source="error", error=error_msg)
+            if raise_on_error:
+                raise TimeoutError(error_msg)
+            return await cache.get()
+
+        # Step 2: Execute refresh with command timeout (clock starts AFTER lock)
+        try:
+            async def _do_refresh():
                 async with client.connection():
-                    connection_entered_at = time.monotonic()
-                    log.debug(
-                        f"Fetching status data from HVAC (raw={include_raw})"
-                    )
+                    log.debug(f"Fetching status data from HVAC (raw={include_raw})")
                     status = await client.get_status_data(include_raw=include_raw)
 
-                if not isinstance(status, SystemStatus):
-                    raise TypeError(
-                        f"Unexpected status type: {type(status)!r}"
-                    )
+                if not isinstance(status, SystemStatus):  # pyright: ignore[reportUnnecessaryIsInstance]
+                    raise TypeError(f"Unexpected status type: {type(status)!r}")
+                return status
 
-            # Update cache with fresh data
+            status = await asyncio.wait_for(
+                _do_refresh(),
+                timeout=settings.COMMAND_TIMEOUT_SECONDS,
+            )
+
             await cache.update(status, source=source)
-
-            # Reset error counter on success
             self._consecutive_errors = 0
             self._last_refresh_time = time.time()
-
-            finished_at = time.monotonic()
             log.info(
-                "Refresh successful (source=%s, lock_wait=%s, connect=%s, elapsed=%.3fs)",
-                source,
-                f"{(lock_acquired_at - started_at):.3f}s"
-                if lock_acquired_at is not None
-                else "n/a",
-                f"{(connection_entered_at - lock_acquired_at):.3f}s"
-                if lock_acquired_at is not None and connection_entered_at is not None
-                else "n/a",
-                finished_at - started_at,
+                "Refresh successful (source=%s, elapsed=%.3fs)",
+                source, time.monotonic() - started_at,
             )
 
         except Exception as e:
-            # Track consecutive errors
             self._consecutive_errors += 1
             log.error(
-                "Refresh failed (%s/%s): %s (lock_wait=%s, elapsed=%.3fs)",
+                "Refresh failed (%s/%s): %s (elapsed=%.3fs)",
                 self._consecutive_errors,
                 self._max_consecutive_errors,
                 e,
-                f"{(lock_acquired_at - started_at):.3f}s"
-                if lock_acquired_at is not None
-                else "n/a",
                 time.monotonic() - started_at,
             )
-
-            # Update cache to reflect error state
             await cache.update(None, source="error", error=str(e))
+            if raise_on_error:
+                raise
+        finally:
+            self._op_lock.release()
 
-        # Return current cache state
         return await cache.get()
 
     async def _refresh_loop(self):
         """Background task that refreshes cache periodically."""
-        # Use configured interval or default to 120 seconds (conservative for bus contention)
         interval = getattr(settings, "CACHE_REFRESH_INTERVAL", 120)
 
         log.info(f"Background refresh loop started (interval: {interval}s)")
@@ -341,24 +267,25 @@ class HVACService:
 
         while not self._stop_event.is_set():
             try:
-                # Perform refresh
                 await self._refresh_once(source="auto_refresh")
 
-                # Wait for next interval
-                await asyncio.sleep(interval)
-
-                # Exponential backoff on repeated errors
+                # Single sleep: use the longer of normal interval or error backoff
                 if self._consecutive_errors > 0:
-                    backoff = min(2 ** self._consecutive_errors, 300)  # Max 5 minutes
-                    log.warning(f"Backing off {backoff}s due to {self._consecutive_errors} errors")
-                    await asyncio.sleep(backoff)
+                    backoff = min(2 ** self._consecutive_errors, 300)
+                    sleep_time = max(interval, backoff)
+                    log.warning(
+                        f"Backing off {sleep_time}s due to {self._consecutive_errors} errors"
+                    )
+                else:
+                    sleep_time = interval
+                await asyncio.sleep(sleep_time)
 
             except asyncio.CancelledError:
                 log.info("Refresh loop cancelled")
                 break
             except Exception as e:
                 log.error(f"Unexpected error in refresh loop: {e}")
-                await asyncio.sleep(30)  # Brief pause before retry
+                await asyncio.sleep(30)
 
         log.info("Background refresh loop stopped")
 

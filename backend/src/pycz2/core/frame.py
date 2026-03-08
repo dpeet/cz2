@@ -8,13 +8,13 @@ from construct import (
     Computed,
     Const,
     Enum,
+    Int16ul,
     Peek,
     Pointer,
     Struct,
     this,
 )
 from crc import Calculator, Configuration
-from construct import Int16ub
 
 from .constants import Function
 
@@ -51,8 +51,8 @@ FrameStruct = Struct(
     "function"
     / Enum(Byte, **{f.name: f.value for f in Function}, default=Function.error),
     "data" / Array(this.length, Byte),
-    # Read checksum as big-endian for testing convenience (CRC validation still uses whole frame)
-    "checksum" / Int16ub,
+    # Parse checksum as little-endian to match build_message's CRC byte order
+    "checksum" / Int16ul,
 )
 
 # Combine the two for a single parsing object
@@ -67,6 +67,17 @@ CZFrame = Any  # This represents the parsed frame structure from construct
 FRAME_TESTER = FrameTestStruct
 FRAME_PARSER = FrameStruct
 
+# Header struct used by build_message (module-level to avoid per-call construction)
+HEADER_STRUCT = Struct(
+    "destination" / Byte,
+    Const(b"\x00"),
+    "source" / Byte,
+    Const(b"\x00"),
+    "length" / Byte,
+    Const(b"\x00\x00"),
+    "function" / Enum(Byte, **{f.name: f.value for f in Function}),
+)
+
 
 def build_message(
     destination: int, source: int, function: Function, data: list[int]
@@ -78,17 +89,7 @@ def build_message(
         "length": len(data),
         "function": function.name,
     }
-    # This is a bit of a hack since construct is mainly for parsing, but it works.
-    # We build the header, then append the data and calculate the checksum.
-    header = Struct(
-        "destination" / Byte,
-        Const(b"\x00"),
-        "source" / Byte,
-        Const(b"\x00"),
-        "length" / Byte,
-        Const(b"\x00\x00"),
-        "function" / Enum(Byte, **{f.name: f.value for f in Function}),
-    ).build(header_data)
+    header = HEADER_STRUCT.build(header_data)
 
     payload = header + bytes(data)
     checksum = Crc16Ccitt(payload)

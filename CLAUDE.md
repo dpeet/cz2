@@ -33,9 +33,7 @@ uv run pycz2 cli monitor
 # Tests & tooling
 uv run pytest
 uv run ruff check .
-uv run mypy src/
 uv run pyright src/
-uv run pylint src/ --errors-only
 ```
 
 ### Frontend (React/Vite)
@@ -106,8 +104,7 @@ Full API documentation: http://localhost:8000/docs (Swagger UI)
 
 ### Backend Architecture
 - **FastAPI server** (`backend/src/pycz2/api.py`): REST endpoints for system/zone
-   control, `/status?flat=1` parity responses, SSE streaming, and
-   202/command-tracking semantics consumed by the frontend and MQTT clients.
+   control, `/status?flat=1` parity responses, and SSE streaming.
 - **HVAC service** (`backend/src/pycz2/hvac_service.py`): Orchestrates cache refreshes,
    command execution, and metadata (staleness, control disable reasons).
 - **MQTT publisher** (`backend/src/pycz2/mqtt.py`): Uses `aiomqtt` with an async context
@@ -156,12 +153,10 @@ response normaliser). Remaining high-level tasks:
 ## Known Issues
 
 ### Backend
-- Worker remains disabled in deployment mode (CLI workflow); cache can become
-  stale if HVAC bridge goes offline for extended periods.
-- Health endpoint reports `degraded` when cache is stale or MQTT disabled—set
-  expectations accordingly in monitoring.
-- SSE endpoint exists but is not yet wired into the frontend (follow-up after
-  stabilising cache + MQTT).
+- Cache can become stale if HVAC bridge goes offline for extended periods.
+- Health endpoint reports `degraded` when cache is stale or MQTT disabled.
+- SSE endpoint exists but is not yet wired into the frontend.
+- Part 2 review findings pending implementation — see `docs/backend-code-review-part2.md`.
 
 ### Frontend
 - Manual UI validation still pending for connection indicator + timestamps

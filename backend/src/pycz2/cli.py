@@ -12,9 +12,9 @@ from .core.client import ComfortZoneIIClient
 from .core.constants import FanMode, SystemMode
 from .core.models import SystemStatus
 
-def _version_callback(value: bool):
+def _version_callback(value: bool):  # pyright: ignore[reportUnusedFunction]
     if value:
-        from . import __version__
+        from . import __version__  # pyright: ignore[reportAttributeAccessIssue]
         typer.echo(__version__)
         raise typer.Exit()
 
@@ -185,11 +185,11 @@ def set_zone(
     ),
     heat: int | None = typer.Option(None, help="Heating setpoint (45-74).", min=45, max=74),
     cool: int | None = typer.Option(None, help="Cooling setpoint (64-99).", min=64, max=99),
-    temp: bool = typer.Option(
-        False, "--temp", help="Enable 'temporary setpoint' mode."
+    temp: bool | None = typer.Option(
+        None, "--temp", help="Enable 'temporary setpoint' mode."
     ),
-    hold: bool = typer.Option(False, "--hold", help="Enable 'hold' mode."),
-    out: bool = typer.Option(False, "--out", help="Enable 'out' mode."),
+    hold: bool | None = typer.Option(None, "--hold", help="Enable 'hold' mode."),
+    out: bool | None = typer.Option(None, "--out", help="Enable 'out' mode."),
 ) -> None:
     """Set options for one or more zones."""
 

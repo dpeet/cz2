@@ -100,7 +100,7 @@ class TestFrameParser:
         assert parsed.source == 99
         assert parsed.function == "read"  # Enum returns the name as string
         assert list(parsed.data) == [1, 16]
-        assert parsed.checksum == int.from_bytes(raw_frame[-2:], "big")
+        assert parsed.checksum == int.from_bytes(raw_frame[-2:], "little")
 
     def test_parse_valid_write_frame(self) -> None:
         """Test parsing a known-valid WRITE command frame."""

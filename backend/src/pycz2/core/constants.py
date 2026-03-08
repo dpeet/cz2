@@ -69,7 +69,7 @@ assert DAMPER_DIVISOR > 0, "Damper divisor must be positive"
 MAX_REPLY_ATTEMPTS = 5
 
 # Number of times to retransmit a request when no reply is received
-MAX_SEND_RETRIES = 5
+MAX_SEND_RETRIES = 3
 
 # Delay (seconds) between retransmission attempts
 SEND_RETRY_DELAY = 0.5

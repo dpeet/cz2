@@ -26,8 +26,7 @@ def api_server() -> None:
     if settings.MQTT_ENABLED:
         print(
             f"MQTT publisher enabled. Publishing to "
-            f"'{settings.MQTT_TOPIC_PREFIX}/status' "
-            f"every {settings.MQTT_PUBLISH_INTERVAL}s."
+            f"'{settings.MQTT_TOPIC_PREFIX}/status' on cache updates."
         )
     else:
         print("MQTT publisher is disabled.")

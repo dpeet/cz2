@@ -10,6 +10,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
+from collections.abc import AsyncGenerator
 from typing import Any, Dict, Optional, Set
 
 from fastapi import Request
@@ -38,7 +39,7 @@ class SubscriberInfo:
     ip_address: str = ""
     connected_at: float = field(default_factory=time.time)
     last_ping: float = field(default_factory=time.time)
-    queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=50))
+    queue: asyncio.Queue[Any] = field(default_factory=lambda: asyncio.Queue(maxsize=50))
     user_agent: str = ""
     update_count: int = 0
     error_count: int = 0
@@ -78,7 +79,7 @@ class SSEManager:
         }
 
         # Heartbeat task
-        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._heartbeat_task: Optional[asyncio.Task[None]] = None
 
     async def start(self):
         """Start the SSE manager background tasks."""
@@ -279,7 +280,7 @@ class SSEManager:
         self,
         subscriber: SubscriberInfo,
         request: Request
-    ):
+    ) -> AsyncGenerator[dict[str, str], None]:
         """
         Generate SSE events for a subscriber.
 
@@ -364,7 +365,7 @@ class SSEManager:
             # Clean up subscriber
             await self.unsubscribe(subscriber.id)
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, Any]:
         """Get SSE manager statistics."""
         return {
             **self.stats,

@@ -34,9 +34,7 @@ returning.
 
 **Key Behaviors:**
 
-- Commands execute synchronously when cache/worker mode is disabled
-- With cache enabled (CLI-style mode), commands update immediately and refresh
-  the cache
+- Commands execute synchronously and refresh the cache
 - MQTT notifications are published automatically if `MQTT_ENABLED=true`
 - All temperature values are in Fahrenheit
 - Zone IDs are 1-indexed (1 to `CZ_ZONES` configured zones)
@@ -51,15 +49,13 @@ returning.
 
 | Mode | Description | Response Format |
 |------|-------------|-----------------|
-| **CLI-style** | Cache enabled, worker disabled (default) | Synchronous with `status` + `meta` |
-| **Worker** | Cache + worker enabled (being phased out) | Async 202 response with command tracking |
+| **CLI-style** | Cache enabled (default) | Synchronous with `status` + `meta` |
 | **Legacy** | Cache disabled | Synchronous with `status` only |
 
 **Environment Variables:**
 
 - `MQTT_ENABLED`: Auto-publish status updates to MQTT broker
 - `ENABLE_CACHE`: Enable state caching (recommended)
-- `WORKER_ENABLED`: Enable async command queue (deprecated)
 
 ---
 
@@ -84,17 +80,6 @@ returning.
     "age_seconds": 0.5
   },
   "message": "System mode set to Heat"
-}
-```
-
-### Worker Mode Response (202 Accepted)
-
-```json
-{
-  "command_id": "cmd_abc123",
-  "status": "queued",
-  "provisional_state": { /* predicted status */ },
-  "check_status_at": "/commands/cmd_abc123"
 }
 ```
 
@@ -439,18 +424,6 @@ Manually trigger a status refresh cycle. This is useful for:
 }
 ```
 
-**Worker Mode (202 Accepted):**
-
-```json
-{
-  "command_id": "cmd_xyz789",
-  "status": "queued",
-  "message": "Status refresh queued",
-  "current_state": { /* last known status */ },
-  "check_status_at": "/commands/cmd_xyz789"
-}
-```
-
 #### Behavior Notes
 
 - Status is fetched directly from HVAC controller
@@ -477,12 +450,9 @@ curl -v -X POST http://localhost:8000/update
 | Code | Meaning | Common Causes |
 |------|---------|---------------|
 | 200 | Success | Command executed and status updated |
-| 202 | Accepted | Command queued (worker mode) |
 | 404 | Not Found | Invalid zone ID |
 | 422 | Validation Error | Invalid field values, missing required fields |
-| 429 | Too Many Requests | Command queue full (worker mode) |
 | 500 | Server Error | HVAC communication failure, internal error |
-| 503 | Service Unavailable | Worker not enabled (for command tracking) |
 | 504 | Gateway Timeout | HVAC controller not responding |
 
 ### Error Response Format

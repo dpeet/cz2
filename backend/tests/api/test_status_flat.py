@@ -139,7 +139,6 @@ def test_app_flat(mock_client, mock_mqtt_client, mock_lock):
     hvac_stop_patch = patch("pycz2.hvac_service.HVACService.stop", noop)
 
     with (
-        patch("pycz2.api.settings.WORKER_ENABLED", False),
         hvac_client_patch,
         hvac_start_patch,
         hvac_stop_patch,
@@ -422,61 +421,35 @@ class TestStatusFlatParity:
                 # Document current behavior
                 print(f"Zone field {field}: {zone[field]} (type: {type(zone[field])})")
 
-    @patch("pycz2.api.settings.MQTT_ENABLED", True)
     def test_mqtt_payload_mirrors_http_response(
-        self, client_flat, mock_client, mock_mqtt_client, legacy_sample_status
+        self, client_flat, mock_client, legacy_sample_status
     ):
         """
         Parity Requirement 6: MQTT payload mirrors HTTP /status?flat=1 response.
 
-        MQTT messages must have identical structure and types to HTTP flat response,
-        including:
-        - Title-case enum strings
-        - Numeric all_mode
-        - Integer time field
-        - String damper_position
+        MQTT publishes via cache subscription (not direct endpoint call).
+        This test verifies that SystemStatus.to_dict(flat=True) — used by
+        the MQTT publisher — produces the same format as GET /status?flat=1.
         """
         mock_client.get_status_data.return_value = legacy_sample_status
 
-        # Capture MQTT publish call - publish_status receives SystemStatus object
-        published_status = None
-
-        async def capture_publish(status: SystemStatus):
-            nonlocal published_status
-            published_status = status
-
-        mock_mqtt_client.publish_status = AsyncMock(side_effect=capture_publish)
-
-        # Trigger update which publishes to MQTT
-        response = client_flat.post("/update")
+        # Get HTTP flat response
+        response = client_flat.get("/status?flat=1")
         assert response.status_code == 200
+        http_data = response.json()
 
-        # Verify MQTT was called
-        mock_mqtt_client.publish_status.assert_called_once()
-        assert published_status is not None, "MQTT publish was not captured"
+        # Convert same status to flat format (same path MQTT publisher uses)
+        mqtt_data = legacy_sample_status.to_dict(flat=True)
 
-        # Convert published status to flat format (same as MQTT does)
-        mqtt_data = published_status.to_dict(flat=True)
-
-        # MQTT payload should match HTTP flat response
-        assert mqtt_data.get("system_mode") == "Auto", (
-            f"MQTT system_mode should be 'Auto', got '{mqtt_data.get('system_mode')}'"
-        )
-        assert mqtt_data.get("fan_mode") == "Auto", (
-            f"MQTT fan_mode should be 'Auto', got '{mqtt_data.get('fan_mode')}'"
-        )
-        assert mqtt_data.get("all_mode") == 1, (
-            f"MQTT all_mode should be 1, got {mqtt_data.get('all_mode')}"
-        )
+        # MQTT payload should match HTTP flat response format
+        assert mqtt_data.get("system_mode") == http_data.get("system_mode") == "Auto"
+        assert mqtt_data.get("fan_mode") == http_data.get("fan_mode") == "Auto"
+        assert mqtt_data.get("all_mode") == http_data.get("all_mode") == 1
         assert "time" in mqtt_data, "MQTT payload missing time field"
-        assert isinstance(mqtt_data.get("time"), int), (
-            f"MQTT time should be int, got {type(mqtt_data.get('time'))}"
-        )
+        assert isinstance(mqtt_data.get("time"), int)
 
         if "zones" in mqtt_data and len(mqtt_data["zones"]) > 0:
-            assert isinstance(mqtt_data["zones"][0]["damper_position"], str), (
-                f"MQTT damper_position should be string, got {type(mqtt_data['zones'][0]['damper_position'])}"
-            )
+            assert isinstance(mqtt_data["zones"][0]["damper_position"], str)
 
     def test_flat_format_excludes_meta_wrapper(
         self, client_flat, mock_client, legacy_sample_status

@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from tenacity import RetryError
 
 from pycz2.api import app
 from pycz2.core.client import ComfortZoneIIClient, get_client, get_lock
@@ -52,9 +51,7 @@ class TestAPIIntegration:
         hvac_start_patch = patch("pycz2.hvac_service.HVACService.start", noop)
         hvac_stop_patch = patch("pycz2.hvac_service.HVACService.stop", noop)
 
-        # Disable worker mode for tests (use synchronous mode)
         with (
-            patch("pycz2.api.settings.WORKER_ENABLED", False),
             hvac_client_patch,
             hvac_start_patch,
             hvac_stop_patch,
@@ -590,16 +587,16 @@ class TestAPIIntegration:
     def test_retry_error_during_update_operation(
         self, client, mock_client, mock_mqtt_client
     ):
-        """Test RetryError during update operation."""
+        """Test timeout error during update operation."""
         # Configure mocks - set succeeds but get_status_data fails
         mock_client.set_system_mode.return_value = None
-        mock_client.get_status_data.side_effect = RetryError(None)
+        mock_client.get_status_data.side_effect = TimeoutError("No valid reply received.")
 
         payload = {"mode": "Heat"}
 
         response = client.post("/system/mode", json=payload)
 
-        # With cache enabled and worker disabled, the error is caught and returns 500
+        # With cache enabled, the error is caught and returns 500
         # The cache will be updated with error status
         assert response.status_code == 500
         data = response.json()

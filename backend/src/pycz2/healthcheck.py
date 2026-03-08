@@ -11,6 +11,16 @@ from .config import settings
 
 log = logging.getLogger(__name__)
 
+# Module-level singleton to avoid per-call client creation overhead
+_http_client: httpx.AsyncClient | None = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(timeout=settings.HEALTHCHECK_TIMEOUT)
+    return _http_client
+
 
 async def send_healthcheck_ping() -> None:
     """
@@ -26,7 +36,6 @@ async def send_healthcheck_ping() -> None:
 
     url = f"{settings.HEALTHCHECK_BASE_URL}/{settings.HEALTHCHECK_UUID}"
 
-    # Build payload with basic system info
     payload = {
         "hostname": socket.gethostname(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -34,10 +43,10 @@ async def send_healthcheck_ping() -> None:
     }
 
     try:
-        async with httpx.AsyncClient(timeout=settings.HEALTHCHECK_TIMEOUT) as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            log.info("Healthcheck ping sent successfully")
+        client = _get_http_client()
+        response = await client.post(url, json=payload)
+        response.raise_for_status()
+        log.info("Healthcheck ping sent successfully")
     except httpx.TimeoutException:
         log.warning("Healthcheck ping timed out after %ds", settings.HEALTHCHECK_TIMEOUT)
     except httpx.HTTPStatusError as e:

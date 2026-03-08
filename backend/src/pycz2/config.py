@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     MQTT_USER: str | None = None
     MQTT_PASSWORD: str | None = None
     MQTT_TOPIC_PREFIX: str = "hvac/cz2"
-    MQTT_PUBLISH_INTERVAL: int = Field(default=60, ge=5)
+
 
     # Cache Settings
     ENABLE_CACHE: bool = True
@@ -38,12 +38,6 @@ class Settings(BaseSettings):
     # Service Settings (CLI-style refresh)
     CACHE_REFRESH_INTERVAL: int = Field(default=300, ge=30)  # Background refresh interval in seconds
 
-    # Worker Settings (being phased out)
-    WORKER_ENABLED: bool = False  # Disabled by default - using CLI-style service instead
-    WORKER_POLL_INTERVAL: int = Field(default=30, ge=5)
-    WORKER_RECONNECT_DELAY: int = Field(default=5, ge=1)
-    WORKER_MAX_RECONNECT_DELAY: int = Field(default=300, ge=60)  # 5 minutes
-
     # SSE Settings
     ENABLE_SSE: bool = True
     SSE_HEARTBEAT_INTERVAL: int = Field(default=30, ge=10)
@@ -51,11 +45,11 @@ class Settings(BaseSettings):
 
     # Healthcheck Settings
     HEALTHCHECK_UUID: str = ""  # UUID from healthchecks.io (leave empty to disable)
-    HEALTHCHECK_BASE_URL: str = "https://healthchecks.tpeet.net/ping"
+    HEALTHCHECK_BASE_URL: str = "https://healthchecks.dpeet.net/ping"
     HEALTHCHECK_TIMEOUT: int = Field(default=5, ge=1)
 
-    # Command Queue Settings
-    COMMAND_QUEUE_MAX_SIZE: int = Field(default=100, ge=10)
+    # Timeout Settings
+    LOCK_TIMEOUT_SECONDS: int = Field(default=10, ge=1)
     COMMAND_TIMEOUT_SECONDS: int = Field(default=30, ge=5)
     LOG_FILE_PATH: str = "~/.cache/pycz2/pycz2.log"
 

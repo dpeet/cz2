@@ -36,7 +36,7 @@ class CacheMeta:
         age = time.time() - self.last_update_ts
         return age > self.stale_after_sec
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert metadata to dictionary."""
         return {
             "connected": self.connected,
@@ -65,7 +65,7 @@ class StateCache:
         self._read_lock = asyncio.Lock()
 
         # Subscribers for real-time updates
-        self._subscribers: set[asyncio.Queue] = set()
+        self._subscribers: set[asyncio.Queue[Any]] = set()
 
     async def initialize(self) -> None:
         """Initialize the cache and load persisted state if available."""
@@ -250,12 +250,12 @@ class StateCache:
         async with self._read_lock:
             return self._meta.version == expected_version
 
-    async def subscribe(self) -> asyncio.Queue:
+    async def subscribe(self) -> asyncio.Queue[Any]:
         """
         Subscribe to cache updates.
         Returns a queue that will receive updates.
         """
-        queue: asyncio.Queue = asyncio.Queue(maxsize=10)
+        queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=10)
         self._subscribers.add(queue)
 
         # Send initial state
@@ -270,7 +270,7 @@ class StateCache:
 
         return queue
 
-    async def unsubscribe(self, queue: asyncio.Queue) -> None:
+    async def unsubscribe(self, queue: asyncio.Queue[Any]) -> None:
         """Unsubscribe from cache updates."""
         self._subscribers.discard(queue)
 
@@ -279,7 +279,7 @@ class StateCache:
         if not self._subscribers:
             return
 
-            status = self._status or self.get_empty_status()
+        status = self._status or self.get_empty_status()
         update = {
             "status": status.to_dict(),
             "meta": self._meta.to_dict()
@@ -301,41 +301,6 @@ class StateCache:
         for queue in dead_subscribers:
             self._subscribers.discard(queue)
 
-    async def set_connection_status(
-        self,
-        connected: bool,
-        source: str,
-        error: Optional[str] = None
-    ) -> None:
-        """
-        Update only the connection status without modifying cached data.
-
-        This is used when the worker connects/disconnects but hasn't
-        polled for data yet. Keeps is_stale true if no recent data.
-
-        Args:
-            connected: Whether the HVAC connection is established
-            source: Source of the update ("connect", "disconnect", "error")
-            error: Optional error message if connection failed
-        """
-        async with self._lock:
-            self._meta.connected = connected
-            self._meta.source = source
-            self._meta.error = error
-            self._meta.version += 1
-
-            # Don't update last_update_ts - that's for actual data updates
-            # This keeps is_stale() returning true until we get real data
-
-            # Persist and notify
-            await self._persist_to_database()
-            await self._notify_subscribers()
-
-            log.info(
-                f"Connection status updated: connected={connected}, "
-                f"source={source}, error={error}"
-            )
-
     async def clear(self) -> None:
         """Clear the cache and reset to initial state."""
         async with self._lock:
@@ -345,7 +310,7 @@ class StateCache:
             await self._notify_subscribers()
             log.info("Cache cleared")
 
-    async def get_stats(self) -> dict:
+    async def get_stats(self) -> dict[str, Any]:
         """Get cache statistics for monitoring."""
         async with self._read_lock:
             return {

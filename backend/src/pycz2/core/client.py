@@ -4,8 +4,8 @@ import base64
 import inspect
 import logging
 from collections.abc import AsyncGenerator
+from typing import Any
 from contextlib import asynccontextmanager
-from functools import lru_cache
 from types import TracebackType
 
 try:
@@ -13,8 +13,6 @@ try:
 except Exception:  # pragma: no cover - optional during tests
     serial_asyncio = None  # type: ignore
 from construct import ConstError, StreamError
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
-
 from .constants import (
     DAMPER_DIVISOR,
     EFFECTIVE_MODE_MAP,
@@ -57,7 +55,7 @@ class ComfortZoneIIClient:
                     raise ModuleNotFoundError("pyserial_asyncio is required for serial connections")
                 (
                     self.reader,
-                    self.writer,
+                    self.writer,  # pyright: ignore[reportAttributeAccessIssue]
                 ) = await serial_asyncio.open_serial_connection(
                     url=self.connect_str,
                     baudrate=9600,
@@ -66,21 +64,7 @@ class ComfortZoneIIClient:
                     stopbits=1,
                 )
             else:
-                # Validate connection string format
-                if ":" not in self.connect_str:
-                    raise ValueError(
-                        f"Invalid connection string format: {self.connect_str}. "
-                        "Expected 'host:port'"
-                    )
-                
-                parts = self.connect_str.split(":", 1)  # Split only on first colon
-                if len(parts) != 2:
-                    raise ValueError(
-                        f"Invalid connection string format: {self.connect_str}. "
-                        "Expected 'host:port'"
-                    )
-                
-                host, port_str = parts
+                host, port_str = self.connect_str.split(":", 1)
                 if not host:
                     raise ValueError("Host cannot be empty")
                 try:
@@ -109,8 +93,9 @@ class ComfortZoneIIClient:
                             pass
                 except asyncio.TimeoutError:
                     raise ConnectionError(
-                        f"Connection to {host}:{port} timed out after 10 seconds"
+                        f"Connection to {host}:{port} timed out after 3 seconds"
                     )
+            self._buffer = b""
             log.info("Connection successful.")
         except Exception as e:
             log.error(f"Failed to connect to {self.connect_str}: {e}")
@@ -121,7 +106,7 @@ class ComfortZoneIIClient:
             try:
                 res = self.writer.close()
                 if inspect.isawaitable(res):
-                    await res  # type: ignore[func-returns-value]
+                    await res  # pyright: ignore[reportGeneralTypeIssues]
             except Exception:
                 pass
             try:
@@ -202,7 +187,7 @@ class ComfortZoneIIClient:
             log.debug(f"WRITE {len(data)} bytes: {data.hex()}")
         res = self.writer.write(data)
         if inspect.isawaitable(res):
-            await res  # type: ignore[func-returns-value]
+            await res  # pyright: ignore[reportGeneralTypeIssues]
         dr = getattr(self.writer, "drain", None)
         if dr:
             dr_res = dr()
@@ -213,7 +198,7 @@ class ComfortZoneIIClient:
         # Prevent memory exhaustion
         max_buffer_size = 10 * MAX_MESSAGE_SIZE
         consecutive_failures = 0
-        max_failures = 50
+        max_failures = 5
         while True:
             if len(self._buffer) < MIN_MESSAGE_SIZE:
                 data = await self._read_data(MAX_MESSAGE_SIZE)
@@ -232,22 +217,22 @@ class ComfortZoneIIClient:
                 log.warning("Buffer overflow, clearing old data")
             for offset in range(len(self._buffer) - MIN_MESSAGE_SIZE + 1):
                 try:
-                    test_frame = FRAME_TESTER.parse(self._buffer[offset:])
+                    test_frame: Any = FRAME_TESTER.parse(self._buffer[offset:])
                     if test_frame.valid:
                         frame_bytes = test_frame.frame
-                        frame = FRAME_PARSER.parse(frame_bytes)
+                        frame: Any = FRAME_PARSER.parse(frame_bytes)
                         self._buffer = self._buffer[offset + len(frame_bytes) :]
                         # Reset on successful frame
                         consecutive_failures = 0
                         try:
                             # Coerce string function back to our Enum for consistency
                             if isinstance(frame.function, str):
-                                frame.function = Function[frame.function]  # type: ignore[attr-defined]
+                                frame.function = Function[frame.function]
                         except Exception:
                             pass
                         if log.isEnabledFor(logging.DEBUG):
                             func_name = (
-                                frame.function.name
+                                frame.function.name  # pyright: ignore[reportAttributeAccessIssue]
                                 if hasattr(frame.function, "name")
                                 else str(frame.function)
                             )
@@ -278,19 +263,9 @@ class ComfortZoneIIClient:
         while True:
             yield await self.get_frame()
 
-    @retry(stop=stop_after_attempt(5), wait=wait_fixed(2), retry=retry_if_exception_type((ConnectionAbortedError, ConnectionError)))
     async def send_with_reply(
         self, destination: int, function: Function, data: list[int]
     ) -> CZFrame:
-        def func_eq(val, expected: Function) -> bool:
-            if isinstance(val, Function):
-                return val == expected
-            if isinstance(val, str):
-                return val == expected.name
-            try:
-                return int(val) == expected.value
-            except Exception:
-                return False
         message = build_message(
             destination=destination,
             source=self.device_id,
@@ -323,15 +298,14 @@ class ComfortZoneIIClient:
                 if rfunc == Function.error:
                     raise OSError(f"Error reply received: {reply.data}")
                 if rfunc == Function.reply:
-                    # Basic validation for read replies
-                    if (
-                        function == Function.read
-                        and len(data) >= 3
-                        and len(reply.data) >= 3
-                    ):
+                    if function == Function.read and len(data) >= 3 and len(reply.data) >= 3:
                         if reply.data[0:3] == data[0:3]:
                             return reply
-                    else:  # For writes, any reply is good
+                    elif function != Function.read:
+                        # Write ACKs: accept any reply without table/row validation
+                        return reply
+                    else:
+                        # Read with short reply: accept as-is
                         return reply
 
             # No matching reply for this transmission; back off and retry
@@ -370,7 +344,7 @@ class ComfortZoneIIClient:
         raw_blob: str | None = None
         if include_raw:
             raw_bytes = bytearray()
-            for key, values in sorted(
+            for _, values in sorted(
                 data_cache.items(),
                 key=lambda kv: tuple(map(int, kv[0].split("."))),
             ):
@@ -554,11 +528,20 @@ class ComfortZoneIIClient:
         hold: bool | None = None,
         out_mode: bool | None = None,
     ) -> None:
-        # Read existing data rows first to modify them
-        row12_frame = await self.read_row(1, 1, 12)
-        row16_frame = await self.read_row(1, 1, 16)
-        data12 = row12_frame.data[3:]
-        data16 = row16_frame.data[3:]
+        # Determine which rows we actually need
+        needs_row16 = heat_setpoint is not None or cool_setpoint is not None
+        needs_row12 = temporary_hold is not None or hold is not None or out_mode is not None
+
+        data12: list[int] = []
+        data16: list[int] = []
+
+        if needs_row12:
+            row12_frame = await self.read_row(1, 1, 12)
+            data12 = row12_frame.data[3:]
+
+        if needs_row16:
+            row16_frame = await self.read_row(1, 1, 16)
+            data16 = row16_frame.data[3:]
 
         for zone_id in zones:
             if not 1 <= zone_id <= self.zone_count:
@@ -578,23 +561,37 @@ class ComfortZoneIIClient:
             if out_mode is not None:
                 data12[12 - 3] = (data12[12 - 3] & ~bit) | (int(out_mode) << z_idx)
 
-        await self.write_row(1, 1, 12, data12)
-        await self.write_row(1, 1, 16, data16)
+        # Write setpoints (row 16) before flags (row 12) so the controller
+        # sees new temperatures before hold/temp modes activate them.
+        if needs_row16:
+            await self.write_row(1, 1, 16, data16)
+        if needs_row12:
+            await self.write_row(1, 1, 12, data12)
 
 
-@lru_cache
+_client: ComfortZoneIIClient | None = None
+
+
 def get_client() -> ComfortZoneIIClient:
-    """Cached factory for the client."""
-    from ..config import settings
+    """Singleton factory for the client."""
+    global _client
+    if _client is None:
+        from ..config import settings
 
-    return ComfortZoneIIClient(
-        connect_str=settings.CZ_CONNECT,
-        zone_count=settings.CZ_ZONES,
-        device_id=settings.CZ_ID,
-    )
+        _client = ComfortZoneIIClient(
+            connect_str=settings.CZ_CONNECT,
+            zone_count=settings.CZ_ZONES,
+            device_id=settings.CZ_ID,
+        )
+    return _client
 
 
-@lru_cache
+_lock: asyncio.Lock | None = None
+
+
 def get_lock() -> asyncio.Lock:
     """A global lock to ensure sequential commands to the HVAC bus."""
-    return asyncio.Lock()
+    global _lock
+    if _lock is None:
+        _lock = asyncio.Lock()
+    return _lock

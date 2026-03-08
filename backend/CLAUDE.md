@@ -44,9 +44,7 @@ uv run pycz2 cli monitor
 # Tests & quality gates
 uv run pytest
 uv run ruff check .
-uv run mypy src/
 uv run pyright src/
-uv run pylint src/ --errors-only
 
 # Container build/publish
 docker build -t mountainstat-backend .

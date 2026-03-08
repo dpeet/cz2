@@ -1,7 +1,6 @@
 # src/pycz2/mqtt.py
 import asyncio
 import logging
-from functools import lru_cache
 
 import aiomqtt as mqtt
 
@@ -84,7 +83,7 @@ class MqttClient:
             return
 
         try:
-            if not await self._ensure_connected():
+            if not await self._ensure_connected() or self._client is None:
                 return
 
             # Use flat format to match legacy MQTT payload structure
@@ -104,6 +103,11 @@ class MqttClient:
             log.error(f"Failed to publish to MQTT: {e}")
 
 
-@lru_cache
+_mqtt_client: MqttClient | None = None
+
+
 def get_mqtt_client() -> MqttClient:
-    return MqttClient()
+    global _mqtt_client
+    if _mqtt_client is None:
+        _mqtt_client = MqttClient()
+    return _mqtt_client
