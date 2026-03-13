@@ -88,7 +88,8 @@ export default function App() {
         } catch (e) {
           console.error("Failed to parse MQTT payload", e);
           toast.error("Failed to parse MQTT message", {
-            description: "Received invalid data from HVAC system"
+            description: "Received invalid data from HVAC system",
+            duration: Infinity,
           });
         }
       }

@@ -229,7 +229,8 @@ export default function System(props) {
             }).catch(error => {
                 logError(error);
                 toast.error("Failed to set system mode", {
-                    description: getErrorMessage(error)
+                    description: getErrorMessage(error),
+                    duration: Infinity,
                 });
                 setIsSystemModeChangeLoading(false);
             });
@@ -273,7 +274,8 @@ export default function System(props) {
             }).catch(error => {
                 logError(error);
                 toast.error("Failed to set fan mode", {
-                    description: getErrorMessage(error)
+                    description: getErrorMessage(error),
+                    duration: Infinity,
                 });
                 setIsFanModeChangeLoading(false);
             });
@@ -315,7 +317,8 @@ export default function System(props) {
             }).catch(error => {
                 logError(error);
                 toast.error("Failed to set zone mode", {
-                    description: getErrorMessage(error)
+                    description: getErrorMessage(error),
+                    duration: Infinity,
                 });
                 setIsAllModeChangeLoading(false);
             });
@@ -369,7 +372,8 @@ export default function System(props) {
             }).catch(error => {
                 logError("Failed to set hold status:", error);
                 toast.error("Failed to set hold status", {
-                    description: getErrorMessage(error)
+                    description: getErrorMessage(error),
+                    duration: Infinity,
                 });
                 setIsHoldStatusChangeLoading(false);
             });
@@ -381,7 +385,8 @@ export default function System(props) {
         // Validate zone selection
         if (!zoneSelection || zoneSelection === "" || zoneSelection === "all") {
             toast.error("Invalid zone selection", {
-                description: "Please select a specific zone (1, 2, or 3)"
+                description: "Please select a specific zone (1, 2, or 3)",
+                duration: Infinity,
             });
             return;
         }
@@ -431,7 +436,8 @@ export default function System(props) {
             .catch(error => {
                 logError("Failed to set hold status:", error);
                 toast.error("Failed to set hold status", {
-                    description: getErrorMessage(error)
+                    description: getErrorMessage(error),
+                    duration: Infinity,
                 });
                 setIsHoldStatusChangeLoading(false);
             });
@@ -444,7 +450,8 @@ export default function System(props) {
         // Validate temperature range (45-85°F)
         if (targetTemperatureSelection < 45 || targetTemperatureSelection > 85) {
             toast.error("Temperature out of range", {
-                description: "Please enter a temperature between 45°F and 85°F"
+                description: "Please enter a temperature between 45°F and 85°F",
+                duration: Infinity,
             });
             setIsTempChangeLoading(false);
             return;
@@ -469,7 +476,8 @@ export default function System(props) {
                 if (modeSelection === "heat" && zone.cool_setpoint) {
                     if (targetTemperatureSelection >= zone.cool_setpoint - 1) {
                         toast.error("Invalid temperature", {
-                            description: `Heat setpoint (${targetTemperatureSelection}°F) must be at least 2°F below ${zoneSelection === "all" ? `zone ${zoneNum}'s` : 'current'} cool setpoint (${zone.cool_setpoint}°F). Gap would be: ${zone.cool_setpoint - targetTemperatureSelection}°F.`
+                            description: `Heat setpoint (${targetTemperatureSelection}°F) must be at least 2°F below ${zoneSelection === "all" ? `zone ${zoneNum}'s` : 'current'} cool setpoint (${zone.cool_setpoint}°F). Gap would be: ${zone.cool_setpoint - targetTemperatureSelection}°F.`,
+                            duration: Infinity,
                         });
                         setIsTempChangeLoading(false);
                         return;
@@ -480,7 +488,8 @@ export default function System(props) {
                 if (modeSelection === "cool" && zone.heat_setpoint) {
                     if (targetTemperatureSelection <= zone.heat_setpoint + 1) {
                         toast.error("Invalid temperature", {
-                            description: `Cool setpoint (${targetTemperatureSelection}°F) must be at least 2°F above ${zoneSelection === "all" ? `zone ${zoneNum}'s` : 'current'} heat setpoint (${zone.heat_setpoint}°F). Gap would be: ${targetTemperatureSelection - zone.heat_setpoint}°F.`
+                            description: `Cool setpoint (${targetTemperatureSelection}°F) must be at least 2°F above ${zoneSelection === "all" ? `zone ${zoneNum}'s` : 'current'} heat setpoint (${zone.heat_setpoint}°F). Gap would be: ${targetTemperatureSelection - zone.heat_setpoint}°F.`,
+                            duration: Infinity,
                         });
                         setIsTempChangeLoading(false);
                         return;
@@ -516,7 +525,8 @@ export default function System(props) {
                 .catch(error => {
                     logError(error);
                     toast.error("Failed to set temperature", {
-                        description: getErrorMessage(error)
+                        description: getErrorMessage(error),
+                        duration: Infinity,
                     });
                     setIsTempChangeLoading(false);
                 });
@@ -542,7 +552,8 @@ export default function System(props) {
                 }).catch(error => {
                     logError(error);
                     toast.error("Failed to set temperature", {
-                        description: getErrorMessage(error)
+                        description: getErrorMessage(error),
+                        duration: Infinity,
                     });
                     setIsTempChangeLoading(false);
                 });

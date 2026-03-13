@@ -94,7 +94,7 @@ Fixed to `temp: false` — see `docs/todo/hold-override-bug.md` for full investi
 ### Future Improvements
 1. **Manual QA**: Document connection indicator + command success paths in README/checklist
 2. **State Management**: Consolidate the remaining ad-hoc state into focused hooks
-3. **Error UX**: Replace placeholder banner (`TODO (clarify)`) with toast/notification system
+3. **Error UX**: Toast system implemented (Sonner). Error toasts use `duration: Infinity` (persist until dismissed). Success/info auto-dismiss at 5s.
 4. **Zone Flexibility**: Derive zone list dynamically from status metadata
 5. **MQTT Resilience**: Add reconnect/backoff strategy around `mqtt` client
 
