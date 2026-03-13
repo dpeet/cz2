@@ -83,6 +83,12 @@ This frontend has been migrated from Node-RED to the Python cz2 backend:
 - ✓ MQTT client standardization (`mqtt` v5)
 - ✓ Test coverage (Vitest + @testing-library/react)
 
+## Fixed: `temp: true` in Hold Commands (2026-03-13)
+
+`apiService.js` previously hardcoded `temp: true` in `setZoneHold()`, which set both
+hold bits on the CZ2 hardware and caused schedule transitions to clear permanent hold.
+Fixed to `temp: false` — see `docs/todo/hold-override-bug.md` for full investigation.
+
 ## Known Issues
 
 ### Future Improvements

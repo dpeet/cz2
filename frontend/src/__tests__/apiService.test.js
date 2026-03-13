@@ -316,7 +316,7 @@ describe('API Service - setZoneHold()', () => {
 
     expect(mockAxiosInstance.post).toHaveBeenCalledWith('/zones/1/hold', {
       hold: true,
-      temp: true,
+      temp: false,
     });
     expect(result).toBeDefined();
   });
@@ -334,7 +334,7 @@ describe('API Service - setZoneHold()', () => {
 
     expect(mockAxiosInstance.post).toHaveBeenCalledWith('/zones/2/hold', {
       hold: false,
-      temp: true,
+      temp: false,
     });
   });
 
@@ -359,7 +359,7 @@ describe('API Service - setZoneHold()', () => {
     expect(mockAxiosInstance.post).toHaveBeenCalledWith('/zones/batch/temperature', {
       zones: [1, 2, 3],
       hold: true,
-      temp: true,
+      temp: false,
     });
   });
 

@@ -19,6 +19,7 @@ from .core.client import get_client, get_lock
 from .core.models import SystemStatus
 
 log = logging.getLogger(__name__)
+audit = logging.getLogger("pycz2.audit")
 
 
 class HVACService:
@@ -230,6 +231,26 @@ class HVACService:
                 _do_refresh(),
                 timeout=settings.COMMAND_TIMEOUT_SECONDS,
             )
+
+            # Detect unexpected state changes during background polling
+            if source == "auto_refresh":
+                prev_status, prev_meta = await cache.get()
+                if prev_status and prev_meta.source != "error" and prev_status.zones and status.zones:
+                    for i, (prev, curr) in enumerate(zip(prev_status.zones, status.zones)):
+                        changes: list[str] = []
+                        if prev.hold != curr.hold:
+                            changes.append(f"hold={prev.hold}->{curr.hold}")
+                        if prev.temporary != curr.temporary:
+                            changes.append(f"temp={prev.temporary}->{curr.temporary}")
+                        if prev.heat_setpoint != curr.heat_setpoint:
+                            changes.append(f"heat={prev.heat_setpoint}->{curr.heat_setpoint}")
+                        if prev.cool_setpoint != curr.cool_setpoint:
+                            changes.append(f"cool={prev.cool_setpoint}->{curr.cool_setpoint}")
+                        if changes:
+                            audit.warning(
+                                "UNEXPECTED zone=%d %s source=%s (no preceding command)",
+                                i + 1, " ".join(changes), source,
+                            )
 
             await cache.update(status, source=source)
             self._consecutive_errors = 0

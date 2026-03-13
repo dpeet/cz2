@@ -157,7 +157,7 @@ export const setZoneHold = async (zoneId, hold, cachedStatus = null) => {
     const response = await client.post("/zones/batch/temperature", {
       zones: zoneIds,
       hold,
-      temp: true,
+      temp: false,
     });
 
     return response.data;
@@ -166,7 +166,7 @@ export const setZoneHold = async (zoneId, hold, cachedStatus = null) => {
   // Single zone - post to specific zone endpoint
   const response = await client.post(`/zones/${zoneId}/hold`, {
     hold,
-    temp: true,
+    temp: false,
   });
   return response.data;
 };

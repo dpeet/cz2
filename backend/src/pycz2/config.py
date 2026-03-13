@@ -105,6 +105,11 @@ LOGGING_CONFIG = {
     },
     "loggers": {
         "pycz2": {"handlers": ["default", "file"], "level": "INFO"},
+        "pycz2.audit": {
+            "handlers": ["default", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "uvicorn.error": {"handlers": ["default", "file"], "level": "INFO"},
         "uvicorn.access": {
             "handlers": ["default", "file"],

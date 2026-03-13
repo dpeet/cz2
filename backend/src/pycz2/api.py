@@ -25,6 +25,7 @@ from .sse import get_sse_manager, create_sse_response
 from .hvac_service import get_hvac_service, shutdown_hvac_service
 
 log = logging.getLogger(__name__)
+audit = logging.getLogger("pycz2.audit")
 
 # Global state to hold the background task
 background_tasks = set()
@@ -32,6 +33,16 @@ background_tasks = set()
 
 def _is_truthy(value: str | None) -> bool:
     return value is not None and value.lower() in {"1", "true", "yes", "on"}
+
+
+def _get_caller(request: Request) -> str:
+    """Extract caller identity from Caddy/Tailscale headers."""
+    user = request.headers.get("x-webauth-user")
+    name = request.headers.get("x-webauth-name")
+    ip = request.headers.get("x-real-ip", request.client.host if request.client else "unknown")
+    if user:
+        return f"{name or user} ({ip})"
+    return f"anonymous ({ip})"
 
 
 def _status_payload(
@@ -44,12 +55,15 @@ def _status_payload(
 async def _execute_and_respond(
     operation: str,
     message: str,
+    request: Request,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Shared helper for POST command endpoints."""
+    caller = _get_caller(request)
     service = await get_hvac_service()
     await service.execute_command(operation, **kwargs)
     status_obj, meta = await service.get_status(force_refresh=False)
+    audit.info("command=%s caller=%s args=%s", operation, caller, kwargs)
 
     return {
         "status": _status_payload(status_obj),
@@ -225,12 +239,14 @@ async def force_update_and_publish() -> dict[str, Any]:
 @app.post("/system/mode")
 async def set_system_mode(
     args: SystemModeArgs,
+    request: Request,
 ) -> dict[str, Any]:
     """Set the main system mode (heat, cool, auto, etc.)."""
     try:
         return await _execute_and_respond(
             "set_system_mode",
             f"System mode set to {args.mode}",
+            request,
             mode=args.mode,
             all_zones=args.all,
         )
@@ -242,12 +258,14 @@ async def set_system_mode(
 @app.post("/system/fan")
 async def set_system_fan(
     args: SystemFanArgs,
+    request: Request,
 ) -> dict[str, Any]:
     """Set the system fan mode (auto, on)."""
     try:
         return await _execute_and_respond(
             "set_fan_mode",
             f"Fan mode set to {args.fan}",
+            request,
             fan_mode=args.fan,
         )
     except Exception as e:
@@ -258,6 +276,7 @@ async def set_system_fan(
 @app.post("/zones/batch/temperature")
 async def set_batch_zone_temperature(
     args: BatchZoneTemperatureArgs,
+    request: Request,
 ) -> dict[str, Any]:
     """
     Set the heating and/or cooling setpoints for multiple zones at once.
@@ -300,6 +319,7 @@ async def set_batch_zone_temperature(
         return await _execute_and_respond(
             "set_zone_setpoints",
             f"Zones {zone_list} temperature updated",
+            request,
             zones=zones,
             heat_setpoint=args.heat,
             cool_setpoint=args.cool,
@@ -316,6 +336,7 @@ async def set_batch_zone_temperature(
 async def set_zone_temperature(
     zone_id: int,
     args: ZoneTemperatureArgs,
+    request: Request,
 ) -> dict[str, Any]:
     """
     Set the heating and/or cooling setpoints for a specific zone.
@@ -353,6 +374,7 @@ async def set_zone_temperature(
         return await _execute_and_respond(
             "set_zone_setpoints",
             f"Zone {zone_id} temperature updated",
+            request,
             zones=[zone_id],
             heat_setpoint=args.heat,
             cool_setpoint=args.cool,
@@ -369,6 +391,7 @@ async def set_zone_temperature(
 async def set_zone_hold(
     zone_id: int,
     args: ZoneHoldArgs,
+    request: Request,
 ) -> dict[str, Any]:
     """Set or release the hold/temporary status for a zone."""
     if not 1 <= zone_id <= settings.CZ_ZONES:
@@ -378,6 +401,7 @@ async def set_zone_hold(
         return await _execute_and_respond(
             "set_zone_setpoints",
             f"Zone {zone_id} hold settings updated",
+            request,
             zones=[zone_id],
             hold=args.hold,
             temporary_hold=args.temp,
