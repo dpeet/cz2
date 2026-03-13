@@ -11,12 +11,14 @@ import asyncio
 import contextlib
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any, Optional, Tuple
 
 from .cache import get_cache, CacheMeta
 from .config import settings
 from .core.client import get_client, get_lock
 from .core.models import SystemStatus
+from .mqtt import get_mqtt_client
 
 log = logging.getLogger(__name__)
 audit = logging.getLogger("pycz2.audit")
@@ -237,20 +239,29 @@ class HVACService:
                 prev_status, prev_meta = await cache.get()
                 if prev_status and prev_meta.source != "error" and prev_status.zones and status.zones:
                     for i, (prev, curr) in enumerate(zip(prev_status.zones, status.zones)):
-                        changes: list[str] = []
+                        changes: dict[str, str] = {}
                         if prev.hold != curr.hold:
-                            changes.append(f"hold={prev.hold}->{curr.hold}")
+                            changes["hold"] = f"{prev.hold}->{curr.hold}"
                         if prev.temporary != curr.temporary:
-                            changes.append(f"temp={prev.temporary}->{curr.temporary}")
+                            changes["temporary"] = f"{prev.temporary}->{curr.temporary}"
                         if prev.heat_setpoint != curr.heat_setpoint:
-                            changes.append(f"heat={prev.heat_setpoint}->{curr.heat_setpoint}")
+                            changes["heat"] = f"{prev.heat_setpoint}->{curr.heat_setpoint}"
                         if prev.cool_setpoint != curr.cool_setpoint:
-                            changes.append(f"cool={prev.cool_setpoint}->{curr.cool_setpoint}")
+                            changes["cool"] = f"{prev.cool_setpoint}->{curr.cool_setpoint}"
                         if changes:
                             audit.warning(
                                 "UNEXPECTED zone=%d %s source=%s (no preceding command)",
-                                i + 1, " ".join(changes), source,
+                                i + 1,
+                                " ".join(f"{k}={v}" for k, v in changes.items()),
+                                source,
                             )
+                            if settings.MQTT_ENABLED:
+                                asyncio.create_task(get_mqtt_client().publish_audit({
+                                    "event": "unexpected_change",
+                                    "timestamp": datetime.now(timezone.utc).astimezone().isoformat(),
+                                    "zone": i + 1,
+                                    "changes": changes,
+                                }))
 
             await cache.update(status, source=source)
             self._consecutive_errors = 0

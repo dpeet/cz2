@@ -4,6 +4,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -64,6 +65,14 @@ async def _execute_and_respond(
     await service.execute_command(operation, **kwargs)
     status_obj, meta = await service.get_status(force_refresh=False)
     audit.info("command=%s caller=%s args=%s", operation, caller, kwargs)
+    if settings.MQTT_ENABLED:
+        asyncio.create_task(get_mqtt_client().publish_audit({
+            "event": "command",
+            "timestamp": datetime.now(timezone.utc).astimezone().isoformat(),
+            "caller": caller,
+            "command": operation,
+            "args": kwargs,
+        }))
 
     return {
         "status": _status_payload(status_obj),

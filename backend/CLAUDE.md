@@ -16,8 +16,9 @@ bridged over TCP) using asynchronous clients and a caching layer.
    202/command-tracking semantics consumed by the frontend and MQTT clients.
 - **HVAC service** (`src/pycz2/hvac_service.py`): Orchestrates cache refreshes,
    command execution, and metadata (staleness, control disable reasons).
-- **MQTT publisher** (`src/pycz2/mqtt.py`): Uses `aiomqtt` with an async context
-   manager to publish snapshots to `hvac/cz2`.
+- **MQTT publisher** (`src/pycz2/mqtt.py`): Uses `aiomqtt` with `asyncio.Lock`
+   serializing all connect/disconnect/publish. Publishes status (retained) to
+   `hvac/cz2/status` and audit events (non-retained) to `hvac/cz2/audit`.
 - **CLI entrypoints** (`src/pycz2/cli.py`): Operational tooling for status
    checks, zone adjustments, and monitoring during troubleshooting.
 - **Command reference** (`docs/API_COMMANDS.md`): Human-readable contract for
@@ -92,6 +93,8 @@ Caddy sends identity headers for Tailscale users:
 - Command audit: logs caller identity, operation, and args for all POST handlers
 - State detection: `UNEXPECTED` warnings in `_refresh_once` when zone state changes during background polls without a preceding command
 - View: `docker compose logs cz2 | grep pycz2.audit`
+- MQTT audit: both audit sites publish to `hvac/cz2/audit` via fire-and-forget `asyncio.create_task()` (avoids blocking HVAC lock or API response)
+- Audit JSON format: `{"event": "command"|"unexpected_change", "timestamp": "...", ...}`
 
 ## CZ2 Hold Mode Hardware
 
