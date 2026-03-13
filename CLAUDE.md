@@ -10,6 +10,13 @@ Mountain House Thermostat is a dual-component HVAC control system for Carrier Co
 
 The system communicates with HVAC controllers via RS-485 serial protocol, providing local control and remote monitoring.
 
+## Repository Structure
+
+- Top-level `/media/data/0/git/mountain_house_thermostat` is NOT a git repo
+- Git repos are in subdirectories (e.g., `cz2/`)
+- `cz2/docs/todo/` — active investigations and planned work
+- `cz2/docs/complete/` — finished investigations (may contain unresolved recommendations — check before assuming all findings were addressed)
+
 ---
 
 ## Quick Development Commands

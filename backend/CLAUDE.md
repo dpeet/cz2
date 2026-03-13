@@ -78,6 +78,20 @@ API_PORT=8000
 - Targeted tests can be run via `uv run pytest tests/api/test_status_flat.py`
    when adjusting response serialization.
 
+## Caddy/Tailscale Identity Headers
+
+Caddy sends identity headers for Tailscale users (backend does NOT yet consume these):
+- `X-Webauth-User`, `X-Webauth-Name`, `X-Webauth-Login` — Tailscale identity
+- `X-Real-IP` — client IP (always present)
+- Trusted IPs get `X-Real-IP` only (identity headers stripped by Caddy)
+- See `docs/todo/hold-override-bug.md` Monitoring Design for planned audit logging
+
+## CZ2 Hold Mode Hardware
+
+- `temp` and `hold` are independent bits: Table 1, Row 12, Byte 9 (temp) and Byte 10 (hold)
+- Perl legacy treats them as mutually exclusive — never sets both simultaneously
+- CZ2 behavior with both bits set is undocumented — see `docs/todo/hold-override-bug.md`
+
 ## Known Follow-ups
 
 - Worker remains disabled (CLI/cron style operation). Re-enabling background
