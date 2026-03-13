@@ -80,11 +80,18 @@ API_PORT=8000
 
 ## Caddy/Tailscale Identity Headers
 
-Caddy sends identity headers for Tailscale users (backend does NOT yet consume these):
+Caddy sends identity headers for Tailscale users:
 - `X-Webauth-User`, `X-Webauth-Name`, `X-Webauth-Login` — Tailscale identity
 - `X-Real-IP` — client IP (always present)
 - Trusted IPs get `X-Real-IP` only (identity headers stripped by Caddy)
-- See `docs/todo/hold-override-bug.md` Monitoring Design for planned audit logging
+- Consumed by `_get_caller()` in `api.py` for audit logging
+
+## Audit Logging
+
+- `pycz2.audit` logger (propagate=False) — command audit + state change detection
+- Command audit: logs caller identity, operation, and args for all POST handlers
+- State detection: `UNEXPECTED` warnings in `_refresh_once` when zone state changes during background polls without a preceding command
+- View: `docker compose logs cz2 | grep pycz2.audit`
 
 ## CZ2 Hold Mode Hardware
 

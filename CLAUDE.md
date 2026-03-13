@@ -19,6 +19,18 @@ The system communicates with HVAC controllers via RS-485 serial protocol, provid
 
 ---
 
+## Deployment
+
+```bash
+cd cz2
+docker compose build
+docker compose up -d --force-recreate
+docker compose logs -f cz2          # watch backend
+docker compose logs cz2 | grep pycz2.audit  # audit trail
+```
+
+---
+
 ## Quick Development Commands
 
 ### Backend (Python/FastAPI)
