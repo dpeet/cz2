@@ -21,7 +21,15 @@ function Thermostat(props) {
             </div>
             <div className='setTemps'>
                 <h2 className='heatSetPoint'>{props.heatSetPoint}</h2>
-                {props.hold !== 0 && <h2 className='hold'>{"Hold"}</h2>}
+                {(props.hold !== 0 || props.temporary !== 0) && (
+                    <h2 className='hold'>
+                        {props.hold !== 0 && props.temporary !== 0
+                            ? "Hold + Temp"
+                            : props.hold !== 0
+                                ? "Hold"
+                                : "Temp"}
+                    </h2>
+                )}
                 <h2 className='coolSetPoint'>{props.coolSetPoint}</h2>
             </div>
             {/* <input type="range" min="60" max="80" value={temperatureDisplay} onChange={handleTemperatureDisplayChange} /> */}

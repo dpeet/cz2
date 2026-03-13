@@ -393,6 +393,24 @@ curl -X POST http://localhost:8000/zones/2/hold \
   -d '{"temp": false}'
 ```
 
+### Hold vs Temporary Hold — Hardware Behavior
+
+The CZ2 controller has two independent hold bits per zone (Table 1, Row 12):
+
+- **Permanent hold** (`hold`): Zone ignores all scheduled changes and keeps
+  the current setpoint indefinitely.
+- **Temporary hold** (`temp`): Zone keeps the current setpoint until the next
+  scheduled transition, then resumes the programmed schedule.
+
+These are independent hardware bits. The Perl legacy CLI treats them as
+mutually exclusive and never sets both simultaneously. Setting both is
+undocumented — empirically, temporary hold expiration may clear permanent
+hold (see `docs/todo/hold-override-bug.md`).
+
+**Best practice:** Set one or the other, not both. When enabling permanent
+hold, explicitly clear temporary hold (`temp: false`). When enabling
+temporary hold, explicitly clear permanent hold (`hold: false`).
+
 ---
 
 ### POST /update

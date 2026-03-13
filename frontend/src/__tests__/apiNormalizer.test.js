@@ -110,6 +110,36 @@ describe("apiNormalizer", () => {
       expect(typeof result.status.all_mode).toBe("number");
     });
 
+    it("should coerce boolean hold to integer in zones", () => {
+      const payload = {
+        status: {
+          system_mode: "Heat",
+          zones: [{ hold: true, temporary: false }],
+        },
+        meta: { connected: true, stale: false },
+      };
+
+      const result = normalizeStatus(payload);
+
+      expect(result.status.zones[0].hold).toBe(1);
+      expect(result.status.zones[0].temporary).toBe(0);
+    });
+
+    it("should coerce boolean temporary to integer in zones", () => {
+      const payload = {
+        status: {
+          system_mode: "Heat",
+          zones: [{ hold: false, temporary: true }],
+        },
+        meta: { connected: true, stale: false },
+      };
+
+      const result = normalizeStatus(payload);
+
+      expect(result.status.zones[0].hold).toBe(0);
+      expect(result.status.zones[0].temporary).toBe(1);
+    });
+
     it("should preserve string damper_position in zones", () => {
       const payload = {
         system_mode: "Cool",

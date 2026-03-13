@@ -186,10 +186,14 @@ def set_zone(
     heat: int | None = typer.Option(None, help="Heating setpoint (45-74).", min=45, max=74),
     cool: int | None = typer.Option(None, help="Cooling setpoint (64-99).", min=64, max=99),
     temp: bool | None = typer.Option(
-        None, "--temp", help="Enable 'temporary setpoint' mode."
+        None, "--temp/--no-temp", help="Enable/disable temporary hold."
     ),
-    hold: bool | None = typer.Option(None, "--hold", help="Enable 'hold' mode."),
-    out: bool | None = typer.Option(None, "--out", help="Enable 'out' mode."),
+    hold: bool | None = typer.Option(
+        None, "--hold/--no-hold", help="Enable/disable permanent hold."
+    ),
+    out: bool | None = typer.Option(
+        None, "--out/--no-out", help="Enable/disable out/away mode."
+    ),
 ) -> None:
     """Set options for one or more zones."""
 

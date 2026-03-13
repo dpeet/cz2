@@ -141,7 +141,7 @@ export const setBatchZoneTemperature = async (zoneIds, options = {}) => {
  * @param {Object} cachedStatus - Cached status for determining zone count (required for 'all')
  * @returns {Promise} Response with status and meta (or array of responses for 'all')
  */
-export const setZoneHold = async (zoneId, hold, cachedStatus = null) => {
+export const setZoneHold = async (zoneId, hold, cachedStatus = null, temp = false) => {
   const client = getApiClient();
 
   // Handle 'all' zones - use batch endpoint to avoid bus contention
@@ -157,7 +157,7 @@ export const setZoneHold = async (zoneId, hold, cachedStatus = null) => {
     const response = await client.post("/zones/batch/temperature", {
       zones: zoneIds,
       hold,
-      temp: false,
+      temp,
     });
 
     return response.data;
@@ -166,7 +166,7 @@ export const setZoneHold = async (zoneId, hold, cachedStatus = null) => {
   // Single zone - post to specific zone endpoint
   const response = await client.post(`/zones/${zoneId}/hold`, {
     hold,
-    temp: false,
+    temp,
   });
   return response.data;
 };

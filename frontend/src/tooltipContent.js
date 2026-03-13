@@ -58,12 +58,12 @@ When set to All Zones, temperature changes apply to every zone. Useful for vacat
    */
   hold: {
     title: "Hold Mode",
-    description: `Override programmed schedule indefinitely:
+    description: `The CZ2 has two types of hold:
 
-• ON — Maintains current temperature setpoints until hold is released
-• OFF — System follows programmed schedule
+• PERMANENT — Keeps setpoints indefinitely until manually released
+• TEMPORARY — Keeps setpoints until the next scheduled transition, then resumes the program
 
-Use Hold when you need to maintain specific temperatures without changing your saved program. Examples: guests staying in a zone, extended vacation, or temporary comfort adjustments.
+Status shows the current hold type for the selected zone. The UI toggle controls permanent hold. Temporary hold is set automatically when changing temperature.
 
 Press Hold again to return to your normal schedule.`
   },

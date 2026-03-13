@@ -30,6 +30,9 @@ const coerceStatusShape = (status) => {
       if (typeof nz.hold === "boolean") {
         nz.hold = nz.hold ? 1 : 0;
       }
+      if (typeof nz.temporary === "boolean") {
+        nz.temporary = nz.temporary ? 1 : 0;
+      }
       return nz;
     });
   }

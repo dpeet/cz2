@@ -425,17 +425,64 @@ class TestCLIIntegration:
     def test_set_zone_command_help(self, runner):
         """Test help output for set-zone command."""
         result = runner.invoke(cli.app, ["set-zone", "--help"])
-        
+
         # Verify exit code
         assert result.exit_code == 0
-        
+
         # Verify help content
         assert "Set options for one or more zones" in result.stdout
         assert "--heat" in result.stdout
         assert "--cool" in result.stdout
         assert "--temp" in result.stdout
+        assert "--no-temp" in result.stdout
         assert "--hold" in result.stdout
+        assert "--no-hold" in result.stdout
         assert "--out" in result.stdout
+        assert "--no-out" in result.stdout
+
+    def test_set_zone_no_hold_clears_hold(self, runner, mock_client, sample_status, monkeypatch):
+        """Test that --no-hold explicitly passes hold=False."""
+        mock_client.set_zone_setpoints.return_value = None
+        mock_client.get_status_data.return_value = sample_status
+
+        async def mock_get_client():
+            return mock_client
+
+        monkeypatch.setattr(cli, "get_client", mock_get_client)
+
+        result = runner.invoke(cli.app, ["set-zone", "1", "--no-hold"])
+
+        assert result.exit_code == 0
+        mock_client.set_zone_setpoints.assert_called_once_with(
+            zones=[1],
+            heat_setpoint=None,
+            cool_setpoint=None,
+            temporary_hold=None,
+            hold=False,
+            out_mode=None,
+        )
+
+    def test_set_zone_no_temp_clears_temp(self, runner, mock_client, sample_status, monkeypatch):
+        """Test that --no-temp explicitly passes temporary_hold=False."""
+        mock_client.set_zone_setpoints.return_value = None
+        mock_client.get_status_data.return_value = sample_status
+
+        async def mock_get_client():
+            return mock_client
+
+        monkeypatch.setattr(cli, "get_client", mock_get_client)
+
+        result = runner.invoke(cli.app, ["set-zone", "1", "--no-temp"])
+
+        assert result.exit_code == 0
+        mock_client.set_zone_setpoints.assert_called_once_with(
+            zones=[1],
+            heat_setpoint=None,
+            cool_setpoint=None,
+            temporary_hold=False,
+            hold=None,
+            out_mode=None,
+        )
 
     def test_set_zone_invalid_temperature(self, runner):
         """Test set-zone command with invalid temperature values."""

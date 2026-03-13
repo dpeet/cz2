@@ -363,6 +363,20 @@ describe('API Service - setZoneHold()', () => {
     });
   });
 
+  it('should pass temp=true when 4th arg is true', async () => {
+    // F1: Decouple hold and temp — callers can now set temp independently
+    mockAxiosInstance.post.mockResolvedValue({
+      data: { status: { zones: [{ hold: 1, temporary: 1 }] }, meta: {} },
+    });
+
+    await setZoneHold(1, true, null, true);
+
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith('/zones/1/hold', {
+      hold: true,
+      temp: true,
+    });
+  });
+
   it('should throw error when zoneId="all" but no cachedStatus provided', async () => {
     // Requirement: Need cached status to determine zone count for "all"
     await expect(setZoneHold('all', true)).rejects.toThrow();

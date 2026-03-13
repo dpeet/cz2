@@ -64,14 +64,17 @@ export default function System(props) {
     const [zone1CoolSetPoint, setZone1CoolSetPoint] = useState(null);
     const [zone1HeatSetPoint, setZone1HeatSetPoint] = useState(null);
     const [zone1Hold, setZone1Hold] = useState(null);
+    const [zone1TempHold, setZone1TempHold] = useState(null);
     const [zone2temp, setZone2Temp] = useState(null);
     const [zone2CoolSetPoint, setZone2CoolSetPoint] = useState(null);
     const [zone2HeatSetPoint, setZone2HeatSetPoint] = useState(null);
     const [zone2Hold, setZone2Hold] = useState(null);
+    const [zone2TempHold, setZone2TempHold] = useState(null);
     const [zone3temp, setZone3Temp] = useState(null);
     const [zone3CoolSetPoint, setZone3CoolSetPoint] = useState(null);
     const [zone3HeatSetPoint, setZone3HeatSetPoint] = useState(null);
     const [zone3Hold, setZone3Hold] = useState(null);
+    const [zone3TempHold, setZone3TempHold] = useState(null);
     const [allMode, setAllMode] = useState(null);
     const [allModeButtonLabel, setAllModeButtonLabel] = useState("");
     const [zoneSelection, setZoneSelection] = useState("");
@@ -109,8 +112,11 @@ export default function System(props) {
                 setZone2HeatSetPoint(statusData.zones[1].heat_setpoint);
                 setZone3HeatSetPoint(statusData.zones[2].heat_setpoint);
                 setZone1Hold(statusData.zones[0].hold);
+                setZone1TempHold(statusData.zones[0].temporary || 0);
                 setZone2Hold(statusData.zones[1].hold);
+                setZone2TempHold(statusData.zones[1].temporary || 0);
                 setZone3Hold(statusData.zones[2].hold);
+                setZone3TempHold(statusData.zones[2].temporary || 0);
 
                 if (statusData.zones[0].hold >= 1 ||
                     statusData.zones[1].hold >= 1 ||
@@ -155,6 +161,26 @@ export default function System(props) {
             case "3": return zone3Hold;
             default: return null;
         }
+    };
+
+    // Helper to get temporary hold status for currently selected zone
+    const getSelectedZoneTempHold = () => {
+        switch(zoneSelection) {
+            case "1": return zone1TempHold;
+            case "2": return zone2TempHold;
+            case "3": return zone3TempHold;
+            default: return null;
+        }
+    };
+
+    // Format hold type label from hold + temporary values
+    const formatHoldLabel = (hold, temp) => {
+        const hasHold = hold >= 1;
+        const hasTemp = temp >= 1;
+        if (hasHold && hasTemp) return "Both";
+        if (hasHold) return "Permanent";
+        if (hasTemp) return "Temporary";
+        return "Off";
     };
 
     // Update single zone hold button label when zone selection or hold status changes
@@ -539,6 +565,7 @@ export default function System(props) {
                         coolSetPoint={zone1CoolSetPoint}
                         heatSetPoint={zone1HeatSetPoint}
                         hold={zone1Hold}
+                        temporary={zone1TempHold}
                     ></Thermostat>
                 </div>
                 <div className='secondary'>
@@ -549,6 +576,7 @@ export default function System(props) {
                         heatSetPoint={zone2HeatSetPoint}
                         allMode={allMode}
                         hold={zone2Hold}
+                        temporary={zone2TempHold}
                     ></Thermostat>
                     <Thermostat
                         zone={3}
@@ -557,6 +585,7 @@ export default function System(props) {
                         heatSetPoint={zone3HeatSetPoint}
                         allMode={allMode}
                         hold={zone3Hold}
+                        temporary={zone3TempHold}
                     ></Thermostat>
                 </div>
 
@@ -709,9 +738,11 @@ export default function System(props) {
                                 <div className="form-group">
                                     <label>Status</label>
                                     {zoneSelection === "all" ? (
-                                        <h2>{zone1Hold >= 1 || zone2Hold >= 1 || zone3Hold >= 1 ? "On" : "Off"}</h2>
+                                        <h2>{zone1Hold >= 1 || zone2Hold >= 1 || zone3Hold >= 1
+                                            || zone1TempHold >= 1 || zone2TempHold >= 1 || zone3TempHold >= 1
+                                            ? "On" : "Off"}</h2>
                                     ) : (
-                                        <h2>{getSelectedZoneHold() >= 1 ? "On" : "Off"}</h2>
+                                        <h2>{formatHoldLabel(getSelectedZoneHold(), getSelectedZoneTempHold())}</h2>
                                     )}
                                 </div>
                                 <div className='form-group'>
