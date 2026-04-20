@@ -12,9 +12,9 @@ from .core.client import ComfortZoneIIClient
 from .core.constants import FanMode, SystemMode
 from .core.models import SystemStatus
 
-def _version_callback(value: bool):  # pyright: ignore[reportUnusedFunction]
+def _version_callback(value: bool):
     if value:
-        from . import __version__  # pyright: ignore[reportAttributeAccessIssue]
+        from . import __version__  # ty: ignore[unresolved-import]
         typer.echo(__version__)
         raise typer.Exit()
 

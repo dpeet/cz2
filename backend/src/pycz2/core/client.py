@@ -55,7 +55,7 @@ class ComfortZoneIIClient:
                     raise ModuleNotFoundError("pyserial_asyncio is required for serial connections")
                 (
                     self.reader,
-                    self.writer,  # pyright: ignore[reportAttributeAccessIssue]
+                    self.writer,
                 ) = await serial_asyncio.open_serial_connection(
                     url=self.connect_str,
                     baudrate=9600,
@@ -106,7 +106,7 @@ class ComfortZoneIIClient:
             try:
                 res = self.writer.close()
                 if inspect.isawaitable(res):
-                    await res  # pyright: ignore[reportGeneralTypeIssues]
+                    await res
             except Exception:
                 pass
             try:
@@ -187,7 +187,7 @@ class ComfortZoneIIClient:
             log.debug(f"WRITE {len(data)} bytes: {data.hex()}")
         res = self.writer.write(data)
         if inspect.isawaitable(res):
-            await res  # pyright: ignore[reportGeneralTypeIssues]
+            await res
         dr = getattr(self.writer, "drain", None)
         if dr:
             dr_res = dr()
@@ -232,7 +232,7 @@ class ComfortZoneIIClient:
                             pass
                         if log.isEnabledFor(logging.DEBUG):
                             func_name = (
-                                frame.function.name  # pyright: ignore[reportAttributeAccessIssue]
+                                frame.function.name
                                 if hasattr(frame.function, "name")
                                 else str(frame.function)
                             )

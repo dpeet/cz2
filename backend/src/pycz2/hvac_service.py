@@ -76,7 +76,7 @@ class HVACService:
         if not force_refresh:
             # Use configured staleness threshold
             if not meta.is_stale():
-                if include_raw and (status is None or status.raw is None):  # pyright: ignore[reportUnnecessaryComparison]
+                if include_raw and (status is None or status.raw is None):
                     log.debug("Cached status lacks raw blob; refreshing with raw data")
                 else:
                     log.debug(
@@ -225,7 +225,7 @@ class HVACService:
                     log.debug(f"Fetching status data from HVAC (raw={include_raw})")
                     status = await client.get_status_data(include_raw=include_raw)
 
-                if not isinstance(status, SystemStatus):  # pyright: ignore[reportUnnecessaryIsInstance]
+                if not isinstance(status, SystemStatus):
                     raise TypeError(f"Unexpected status type: {type(status)!r}")
                 return status
 
