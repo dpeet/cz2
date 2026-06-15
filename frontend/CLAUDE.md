@@ -95,7 +95,11 @@ Fixed to `temp: false` — see `docs/todo/hold-override-bug.md` for full investi
 1. **Manual QA**: Document connection indicator + command success paths in README/checklist
 2. **State Management**: Consolidate the remaining ad-hoc state into focused hooks
 3. **Error UX**: Toast system implemented (Sonner). Error toasts use `duration: Infinity` (persist until dismissed). Success/info auto-dismiss at 5s.
-4. **Zone Flexibility**: Derive zone list dynamically from status metadata
+4. **Zone Flexibility**: Derive zone list dynamically from status metadata.
+   Zones are currently **hardcoded to 3** in `System.jsx` (`zone1`–`zone3` state +
+   the "1/2/3" selector options). The CZ2 hardware supports up to 8 and this install
+   has 4 wired, but only 3 are configured/in use. Adding a zone today requires new
+   `zoneN*` state and selector entries; the dynamic refactor would remove that.
 5. **MQTT Resilience**: Add reconnect/backoff strategy around `mqtt` client
 
 ## Code Quality Guidelines

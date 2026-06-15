@@ -58,7 +58,7 @@ Environment variables (see `.env.example`) control connectivity:
 
 ```env
 CZ_CONNECT=10.0.1.20:8899      # TCP bridge to HVAC (or /dev/ttyUSB0)
-CZ_ZONES=4                     # Number of zones
+CZ_ZONES=3                     # 4-zone controller, 3 zones in use
 MQTT_ENABLED=true              # Enable MQTT publisher
 MQTT_HOST=host.docker.internal # External broker hostname/IP
 MQTT_PORT=1883
@@ -101,6 +101,16 @@ Caddy sends identity headers for Tailscale users:
 - `temp` and `hold` are independent bits: Table 1, Row 12, Byte 9 (temp) and Byte 10 (hold)
 - Perl legacy treats them as mutually exclusive — never sets both simultaneously
 - CZ2 behavior with both bits set is undocumented — see `docs/todo/hold-override-bug.md`
+
+## Inspecting Raw Hardware State
+
+Read-only raw row dumps reveal what the controller actually reports (independent of
+`CZ_ZONES`). `CZ_CONNECT=<host:port> uv run pycz2 cli read <dest> <table> <row>` prints
+the row's bytes; index = byte offset (first 3 bytes are `0.table.row`).
+- Row 12: byte 9 = temp bitmask, byte 10 = hold bitmask (bit N = zone N+1), byte 4 = mode
+- Row 16: setpoints (groups of 4 → this install is a **4-zone** controller)
+- Row 24: zone temps; zones with no thermostat read 0
+- This install: 4-zone hardware, **3 zones in use** (zones 1–3 report temps; zone 4 reads 0)
 
 ## Known Follow-ups
 

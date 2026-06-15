@@ -59,6 +59,10 @@ const getErrorMessage = (error) => {
 
 export default function System(props) {
     const [CZ2Status, setCZ2Status] = useState(props.status);
+    // Zones are hardcoded to 3 (zone1–zone3 state, the "1/2/3" selectors below).
+    // The CZ2 hardware supports up to 8 zones; this install has 4 wired but only 3
+    // configured/in use. Adding a 4th zone means new zoneN* state + selector entries
+    // here (or the dynamic-zone refactor noted in CLAUDE.md "Zone Flexibility").
     const [zone1temp, setZone1Temp] = useState(null);
     const [zone1Humidity, setZone1Humidity] = useState(null);
     const [zone1CoolSetPoint, setZone1CoolSetPoint] = useState(null);
@@ -181,6 +185,44 @@ export default function System(props) {
         if (hasHold) return "Permanent";
         if (hasTemp) return "Temporary";
         return "Off";
+    };
+
+    // Render All-Zones hold status: aggregate label when zones agree,
+    // otherwise "Mixed" with a popover showing the per-zone breakdown.
+    const renderAllZonesHoldStatus = () => {
+        const perZone = [
+            { zone: 1, label: formatHoldLabel(zone1Hold, zone1TempHold) },
+            { zone: 2, label: formatHoldLabel(zone2Hold, zone2TempHold) },
+            { zone: 3, label: formatHoldLabel(zone3Hold, zone3TempHold) },
+        ];
+        const aggregate = new Set(perZone.map(z => z.label)).size === 1
+            ? perZone[0].label
+            : "Mixed";
+
+        if (aggregate !== "Mixed") {
+            return <h2>{aggregate}</h2>;
+        }
+
+        return (
+            <h2>
+                Mixed
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <span style={{ marginLeft: '6px', cursor: 'help', opacity: 0.7 }}>ⓘ</span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <div>
+                            <strong>Hold by zone</strong>
+                            {perZone.map(z => (
+                                <p key={z.zone} style={{ margin: '2px 0' }}>
+                                    Zone {z.zone}: {z.label}
+                                </p>
+                            ))}
+                        </div>
+                    </TooltipContent>
+                </Tooltip>
+            </h2>
+        );
     };
 
     // Update single zone hold button label when zone selection or hold status changes
@@ -749,9 +791,7 @@ export default function System(props) {
                                 <div className="form-group">
                                     <label>Status</label>
                                     {zoneSelection === "all" ? (
-                                        <h2>{zone1Hold >= 1 || zone2Hold >= 1 || zone3Hold >= 1
-                                            || zone1TempHold >= 1 || zone2TempHold >= 1 || zone3TempHold >= 1
-                                            ? "On" : "Off"}</h2>
+                                        renderAllZonesHoldStatus()
                                     ) : (
                                         <h2>{formatHoldLabel(getSelectedZoneHold(), getSelectedZoneTempHold())}</h2>
                                     )}

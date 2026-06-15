@@ -82,8 +82,8 @@ npm run test:ui       # Vitest UI runner
 ```env
 # Connection: host:port for TCP or /dev/ttyUSB0 for serial
 CZ_CONNECT="10.0.1.20:8899"
-CZ_ZONES=4
-CZ_ZONE_NAMES="Main Room,Upstairs,Downstairs,Office"
+CZ_ZONES=3   # 4-zone ComfortZone II controller, only 3 zones in use
+CZ_ZONE_NAMES="Main Room,Upstairs Bedroom,Downstairs"
 
 # MQTT Configuration
 MQTT_HOST="mqtt_broker_ip"

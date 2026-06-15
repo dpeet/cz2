@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import System from '../System';
 import * as apiService from '../apiService';
 
@@ -234,6 +234,74 @@ describe('System Component - API Integration', () => {
 
       // Verify hold form is present
       expect(screen.getByText('Change Hold')).toBeInTheDocument();
+    });
+  });
+
+  describe('All-Zones Hold Status', () => {
+    // Build a normalized status with explicit per-zone hold/temporary bits
+    const statusWithZoneHolds = (holds) => ({
+      ...mockStatus,
+      status: {
+        ...mockStatus.status,
+        zones: holds.map((h, i) => ({
+          ...mockStatus.status.zones[i],
+          hold: h.hold,
+          temporary: h.temporary,
+        })),
+      },
+    });
+
+    // The hold form's Zone select is the only combobox offering an "all" option
+    // (the temperature form omits it when all_mode === 0).
+    const selectAllZones = () => {
+      const holdSelect = screen
+        .getAllByRole('combobox')
+        .find((select) => select.querySelector('option[value="all"]'));
+      fireEvent.change(holdSelect, { target: { value: 'all' } });
+      return holdSelect;
+    };
+
+    it('shows "Mixed" with a per-zone breakdown popover when zones differ', async () => {
+      // Z1 permanent (hold), Z2 off, Z3 temporary
+      const status = statusWithZoneHolds([
+        { hold: 1, temporary: 0 },
+        { hold: 0, temporary: 0 },
+        { hold: 0, temporary: 1 },
+      ]);
+      render(<System status={status} connection="Connected" />);
+
+      selectAllZones();
+
+      // Headline reflects the disagreement instead of collapsing to "On"
+      const statusLabel = await screen.findByText(/^Mixed$/);
+      expect(statusLabel).toBeInTheDocument();
+      expect(screen.queryByText(/^On$/)).not.toBeInTheDocument();
+
+      // Opening the popover reveals the per-zone breakdown
+      const infoIcon = within(statusLabel.closest('h2')).getByText('ⓘ');
+      fireEvent.focus(infoIcon);
+
+      await waitFor(() => {
+        expect(screen.getAllByText(/Zone 1: Permanent/).length).toBeGreaterThan(0);
+      });
+      expect(screen.getAllByText(/Zone 2: Off/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Zone 3: Temporary/).length).toBeGreaterThan(0);
+    });
+
+    it('shows a single aggregate label (no popover) when all zones agree', async () => {
+      // All three zones on permanent hold
+      const status = statusWithZoneHolds([
+        { hold: 1, temporary: 0 },
+        { hold: 1, temporary: 0 },
+        { hold: 1, temporary: 0 },
+      ]);
+      render(<System status={status} connection="Connected" />);
+
+      selectAllZones();
+
+      expect(await screen.findByText(/^Permanent$/)).toBeInTheDocument();
+      expect(screen.queryByText(/^Mixed$/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/^On$/)).not.toBeInTheDocument();
     });
   });
 
